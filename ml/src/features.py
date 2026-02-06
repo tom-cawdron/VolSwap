@@ -2,13 +2,23 @@
 Feature Engineering Pipeline for Regime Detection.
 
 Fetches OHLCV data from Binance via ccxt and computes volatility features
-used by both the HMM baseline and the GRU classifier.
+used by the HMM labeller and the XGBoost classifier.
+
+Migration note (Feb 2026):
+    Updated to integrate GARCH(1,1) features from ``garch.py``.
+    The ``engineer_features`` function now appends GARCH outputs to the
+    feature matrix.  Downstream callers (inference, training) are
+    unaffected — they simply see extra columns.
 """
 
+import logging
+from typing import Optional
+
+import ccxt
 import numpy as np
 import pandas as pd
-import ccxt
-from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -75,19 +85,43 @@ def add_high_low_range(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
+def add_abs_log_return(df: pd.DataFrame) -> pd.DataFrame:
+    """Absolute log return — clean shock-magnitude signal."""
+    df = df.copy()
+    df["abs_log_return"] = df["log_return"].abs()
+    return df
+
+
+def engineer_features(
+    df: pd.DataFrame,
+    include_garch: bool = True,
+) -> pd.DataFrame:
     """
     Full feature engineering pipeline.
 
     Returns a DataFrame with columns:
         log_return, realised_vol_24h, realised_vol_168h,
-        vol_of_vol, volume_zscore, hl_range
+        vol_of_vol, volume_zscore, abs_log_return
+        + GARCH(1,1) features when *include_garch* is True:
+        sigma_t, garch_alpha, garch_beta, garch_persistence,
+        standardised_residual
     """
     df = add_log_returns(df)
     df = add_realised_vol(df, windows=[24, 168])
     df = add_vol_of_vol(df, window=48)
     df = add_volume_zscore(df, window=168)
-    df = add_high_low_range(df)
+    df = add_abs_log_return(df)
+
+    if include_garch:
+        try:
+            from garch import extract_garch_features
+        except ImportError:
+            from src.garch import extract_garch_features
+
+        logger.info("Extracting GARCH(1,1) features (rolling window) …")
+        garch_df = extract_garch_features(df)
+        df = pd.concat([df, garch_df], axis=1)
+
     df.dropna(inplace=True)
     return df
 
@@ -106,14 +140,32 @@ def get_feature_df(
     return engineer_features(raw)
 
 
-# Feature columns used by models
-FEATURE_COLS = [
+# HMM input features — only pure volatility measures to avoid
+# heterogeneous-cluster problems with a 2-state Gaussian HMM.
+HMM_FEATURE_COLS: list[str] = [
+    "realised_vol_24h",
+    "vol_of_vol",
+]
+
+# Base technical feature columns (used by XGBoost alongside GARCH)
+FEATURE_COLS: list[str] = [
     "realised_vol_24h",
     "realised_vol_168h",
     "vol_of_vol",
     "volume_zscore",
-    "hl_range",
+    "abs_log_return",
 ]
+
+# Full feature set including GARCH outputs (used by XGBoost classifier)
+GARCH_COLS: list[str] = [
+    "sigma_t",
+    "garch_alpha",
+    "garch_beta",
+    "garch_persistence",
+    "standardised_residual",
+]
+
+ALL_FEATURE_COLS: list[str] = FEATURE_COLS + GARCH_COLS
 
 
 if __name__ == "__main__":

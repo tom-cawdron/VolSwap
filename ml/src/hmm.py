@@ -2,7 +2,13 @@
 Hidden Markov Model (HMM) Baseline for Regime Detection.
 
 Fits a 2-state Gaussian HMM on volatility features to produce
-ground-truth regime labels used to train the GRU classifier.
+ground-truth regime labels used to train the XGBoost classifier.
+
+Migration note (Feb 2026):
+    - Added explicit label-swap check (means_[0] > means_[1] → swap)
+      to guarantee label 1 = HIGH_VOL regardless of HMM initialisation.
+    - Output CSV now includes GARCH(1,1) features alongside the base
+      technical features, ready for direct consumption by xgboost_model.py.
 
 Usage:
     python -m src.hmm          # run from ml/ directory
@@ -19,9 +25,9 @@ import matplotlib.pyplot as plt
 from hmmlearn.hmm import GaussianHMM
 
 try:
-    from src.features import FEATURE_COLS, get_feature_df
+    from src.features import HMM_FEATURE_COLS, get_feature_df
 except ImportError:
-    from features import FEATURE_COLS, get_feature_df
+    from features import HMM_FEATURE_COLS, get_feature_df
 
 
 # ---------------------------------------------------------------------------
@@ -84,22 +90,24 @@ def main() -> None:
     print("HMM Regime Detection — Ground Truth Label Generation")
     print("=" * 60)
 
-    # 1. Fetch and engineer features
-    print("\n[1/4] Fetching data and engineering features …")
+    # 1. Fetch and engineer features (including GARCH)
+    print("\n[1/4] Fetching data and engineering features (incl. GARCH) …")
     df = get_feature_df(symbol="ETH/USDT", timeframe="1h", limit=5000)
-    features = df[FEATURE_COLS].values
-    print(f"  Feature matrix shape: {features.shape}")
+    hmm_features = df[HMM_FEATURE_COLS].values
+    print(f"  HMM input features: {HMM_FEATURE_COLS}")
+    print(f"  HMM feature matrix shape: {hmm_features.shape}")
+    print(f"  Total columns (with GARCH): {len(df.columns)}")
 
-    # 2. Fit HMM
+    # 2. Fit HMM (only on pure volatility features — no GARCH inputs)
     print("\n[2/4] Fitting 2-state Gaussian HMM …")
-    model = fit_hmm(features)
+    model = fit_hmm(hmm_features)
     print(f"  Converged: {model.monitor_.converged}")
-    print(f"  Log-likelihood: {model.score(features):.2f}")
+    print(f"  Log-likelihood: {model.score(hmm_features):.2f}")
     print(f"  State means:\n{model.means_}")
 
     # 3. Label regimes
     print("\n[3/4] Generating regime labels …")
-    df["regime_label"] = label_regimes(model, features)
+    df["regime_label"] = label_regimes(model, hmm_features)
     regime_counts = df["regime_label"].value_counts()
     print(f"  LOW_VOL (0): {regime_counts.get(0, 0)} samples")
     print(f"  HIGH_VOL (1): {regime_counts.get(1, 0)} samples")

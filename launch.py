@@ -52,21 +52,21 @@ def install_deps():
 
 
 def train_models():
-    """Train HMM + GRU if model files don't exist."""
+    """Train HMM + XGBoost if model files don't exist."""
     hmm_ok = (MODELS_DIR / "hmm_baseline.pkl").exists()
-    gru_ok = (MODELS_DIR / "regime_gru.pt").exists()
+    xgb_ok = (MODELS_DIR / "xgb_regime.joblib").exists()
 
-    if hmm_ok and gru_ok:
+    if hmm_ok and xgb_ok:
         print(">> Models already trained. Use --force-train to retrain.")
         return
 
     if not hmm_ok:
-        print(">> Training HMM baseline...")
+        print(">> Training HMM baseline (2-state regime labeller)...")
         run([PYTHON, "src/hmm.py"], cwd=ML_DIR)
 
-    if not gru_ok:
-        print(">> Training GRU classifier...")
-        run([PYTHON, "src/gru.py"], cwd=ML_DIR)
+    if not xgb_ok:
+        print(">> Training XGBoost classifier (GARCH features + Platt scaling)...")
+        run([PYTHON, "src/xgboost_model.py"], cwd=ML_DIR)
 
     print(">> Models ready.")
 

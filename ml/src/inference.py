@@ -5,31 +5,43 @@ Endpoints:
     GET  /predict  — fetch latest data, run model, return regime probabilities
     GET  /health   — health check
 
+Migration note (Feb 2026):
+    Switched from GRU (PyTorch) to XGBoost + Platt scaling.
+    GARCH(1,1) features are now computed at inference time.
+    Output JSON schema is UNCHANGED — oracle bridge and frontend
+    are fully compatible without modification.
+
 Usage:
-    uvicorn src.inference:app --reload --port 8000
+    uvicorn src.inference:app --reload --port 8000 --app-dir ml
 """
 
+import hashlib
+import logging
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
-import torch
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 try:
-    from src.features import FEATURE_COLS, fetch_ohlcv, engineer_features
-    from src.gru import RegimeGRU, SEQ_LEN, DEVICE
+    from src.features import ALL_FEATURE_COLS, fetch_ohlcv, engineer_features
+    from src.xgboost_model import load_model
 except ImportError:
-    from features import FEATURE_COLS, fetch_ohlcv, engineer_features
-    from gru import RegimeGRU, SEQ_LEN, DEVICE
+    from features import ALL_FEATURE_COLS, fetch_ohlcv, engineer_features
+    from xgboost_model import load_model
 
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIR = PROJECT_ROOT / "models"
+
+# Minimum rows of engineered data needed for a single prediction
+MIN_ROWS: int = 1
 
 
 # ---------------------------------------------------------------------------
@@ -38,8 +50,8 @@ MODEL_DIR = PROJECT_ROOT / "models"
 
 app = FastAPI(
     title="Finance Multiverse — Regime Inference",
-    description="Returns regime probabilities from the GRU classifier.",
-    version="0.1.0",
+    description="Returns regime probabilities from the XGBoost classifier.",
+    version="0.2.0",
 )
 
 
@@ -62,51 +74,36 @@ class HealthResponse(BaseModel):
 # Model loading (singleton)
 # ---------------------------------------------------------------------------
 
-_model: RegimeGRU | None = None
-_feat_mean: np.ndarray | None = None
-_feat_std: np.ndarray | None = None
+_model: Any = None
+_feature_cols: list[str] = []
 _model_hash: str = ""
 
 
-def _load_model() -> RegimeGRU:
-    global _model, _feat_mean, _feat_std, _model_hash
+def _load_model() -> None:
+    global _model, _feature_cols, _model_hash
 
-    weights_path = MODEL_DIR / "regime_gru.pt"
-    norm_path = MODEL_DIR / "feature_norm.npz"
+    model_path = MODEL_DIR / "xgb_regime.joblib"
 
-    if not weights_path.exists():
+    if not model_path.exists():
         raise FileNotFoundError(
-            f"Model weights not found at {weights_path}. Run `python src/gru.py` first."
+            f"Model not found at {model_path}. "
+            "Run `python -m src.xgboost_model` first."
         )
 
-    model = RegimeGRU(input_dim=len(FEATURE_COLS)).to(DEVICE)
-    state_dict = torch.load(weights_path, map_location=DEVICE, weights_only=True)
-    model.load_state_dict(state_dict)
-    model.eval()
+    _model, _feature_cols = load_model()
 
-    # Compute model hash (keccak256 proxy — sha256 here for simplicity)
-    import hashlib
-    raw_bytes = weights_path.read_bytes()
+    # Compute model hash (sha256)
+    raw_bytes = model_path.read_bytes()
     _model_hash = hashlib.sha256(raw_bytes).hexdigest()
 
-    # Load normalisation params
-    if norm_path.exists():
-        norms = np.load(norm_path)
-        _feat_mean = norms["mean"]
-        _feat_std = norms["std"]
-    else:
-        _feat_mean = np.zeros(len(FEATURE_COLS))
-        _feat_std = np.ones(len(FEATURE_COLS))
-
-    _model = model
-    return model
+    logger.info("XGBoost model loaded (%d features).", len(_feature_cols))
 
 
-def get_model() -> RegimeGRU:
+def get_model() -> Any:
     global _model
     if _model is None:
         _load_model()
-    return _model  # type: ignore[return-value]
+    return _model
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +111,7 @@ def get_model() -> RegimeGRU:
 # ---------------------------------------------------------------------------
 
 @app.on_event("startup")
-async def startup():
+async def startup() -> None:
     try:
         _load_model()
         print("Model loaded successfully.")
@@ -124,52 +121,51 @@ async def startup():
 
 
 @app.get("/health", response_model=HealthResponse)
-async def health():
+async def health() -> HealthResponse:
     return HealthResponse(status="ok", model_loaded=_model is not None)
 
 
 @app.get("/predict", response_model=RegimePrediction)
-async def predict():
+async def predict() -> RegimePrediction:
     """
     Full inference loop:
-    1. Fetch latest SEQ_LEN+200 hours of ETH data (buffer for feature warmup)
-    2. Engineer features
-    3. Normalise
-    4. Run GRU
-    5. Return regime probabilities + entropy
+    1. Fetch latest 500 hours of ETH data (buffer for GARCH + feature warmup)
+    2. Engineer all features (technical + GARCH)
+    3. Extract most-recent row
+    4. Run XGBoost predict_proba
+    5. Compute entropy
+    6. Return JSON — same schema as before migration
     """
     model = get_model()
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
-    # 1. Fetch data
+    # 1. Fetch data (720h = 30 days — enough for 168h GARCH burn-in + warm-up)
     try:
-        raw_df = fetch_ohlcv("ETH/USDT", "1h", limit=SEQ_LEN + 250)
+        raw_df = fetch_ohlcv("ETH/USDT", "1h", limit=720)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Data fetch failed: {e}")
 
-    # 2. Feature engineering
-    df = engineer_features(raw_df)
-    if len(df) < SEQ_LEN:
+    # 2. Full feature engineering including GARCH
+    df = engineer_features(raw_df, include_garch=True)
+    if len(df) < MIN_ROWS:
         raise HTTPException(
             status_code=500,
-            detail=f"Not enough data after feature engineering: {len(df)} < {SEQ_LEN}",
+            detail=f"Not enough data after feature engineering: {len(df)}",
         )
 
-    # 3. Normalise
-    features = df[FEATURE_COLS].values[-SEQ_LEN:]
-    features = (features - _feat_mean) / (_feat_std + 1e-8)
+    # 3. Most-recent feature vector — fill any residual NaN from GARCH
+    #    convergence failures so XGBoost never sees missing values
+    latest_row = df[_feature_cols].iloc[[-1]].fillna(0.0).values
 
-    # 4. Inference
-    x = torch.tensor(features, dtype=torch.float32).unsqueeze(0).to(DEVICE)
-    with torch.no_grad():
-        probs = model(x)  # (1, 2)
+    # 4. Predict
+    proba = model.predict_proba(latest_row)  # shape (1, 2)
+    p_low: float = float(proba[0, 0])
+    p_high: float = float(proba[0, 1])
 
-    p_low = probs[0, 0].item()
-    p_high = probs[0, 1].item()
-
-    # 5. Entropy
-    entropy = -float(torch.sum(probs * torch.log(probs + 1e-9)).item())
+    # 5. Shannon entropy
+    eps = 1e-9
+    entropy = -float(p_low * np.log(p_low + eps) + p_high * np.log(p_high + eps))
     confidence = max(p_high, p_low)
     regime = "HIGH_VOL" if p_high > p_low else "LOW_VOL"
 
