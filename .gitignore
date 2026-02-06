@@ -19,6 +19,7 @@ build/
 # Data files
 data/raw/*.csv
 data/raw/*.json
+combined_market_data_2025.csv
 *.h5
 *.pkl
 
