@@ -5,9 +5,9 @@ A hybrid GARCH + Machine Learning model for real-time volatility forecasting in 
 ## ETH Oxford 2026 Hackathon Project
 
 **Team Members:**
-- Tom - LSE (Math & CS)
-- [Teammate 2]
-- [Teammate 3]
+- Tom Cawdron - LSE (Mathematics with Data Science)
+- Ilyes Kallel - UCL ()
+- Filippo - UCL ()
 
 **Sponsors:**
 - Flare (FTSO price feeds)
