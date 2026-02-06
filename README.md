@@ -97,8 +97,8 @@ $$H = -\sum_i p_i \log(p_i)$$
 
 ### ML Pipeline
 ```bash
-cd ml
 pip install -r requirements.txt
+cd ml
 
 # Train HMM baseline (generates ground truth labels)
 python src/hmm.py
@@ -146,7 +146,6 @@ finance-multiverse/
 │   │   ├── hmm.py          # HMM baseline for ground truth labels
 │   │   ├── gru.py          # GRU regime classifier (PyTorch)
 │   │   └── inference.py    # FastAPI inference service
-│   └── requirements.txt
 ├── contracts/
 │   ├── src/
 │   │   ├── RegimeOracle.sol
@@ -167,6 +166,7 @@ finance-multiverse/
 │       └── contracts.ts     # ABIs and contract addresses
 ├── docs/
 │   └── architecture.md
+├── requirements.txt            # All Python dependencies
 └── README.md
 ```
 
