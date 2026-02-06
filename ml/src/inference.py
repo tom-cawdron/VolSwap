@@ -17,12 +17,12 @@ import torch
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from features import (
-    FEATURE_COLS,
-    fetch_ohlcv,
-    engineer_features,
-)
-from gru import RegimeGRU, SEQ_LEN, DEVICE
+try:
+    from src.features import FEATURE_COLS, fetch_ohlcv, engineer_features
+    from src.gru import RegimeGRU, SEQ_LEN, DEVICE
+except ImportError:
+    from features import FEATURE_COLS, fetch_ohlcv, engineer_features
+    from gru import RegimeGRU, SEQ_LEN, DEVICE
 
 
 # ---------------------------------------------------------------------------

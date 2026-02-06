@@ -19,7 +19,10 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import classification_report, roc_auc_score
 
-from features import FEATURE_COLS
+try:
+    from src.features import FEATURE_COLS
+except ImportError:
+    from features import FEATURE_COLS
 
 
 # ---------------------------------------------------------------------------
@@ -197,6 +200,7 @@ def main() -> None:
     )
 
     best_auc = 0.0
+    best_val_loss = float("inf")
     for epoch in range(1, EPOCHS + 1):
         train_loss, train_acc = train_one_epoch(model, train_dl, criterion, optimiser)
         val_loss, val_acc, val_auc = evaluate(model, val_dl, criterion)
@@ -208,12 +212,20 @@ def main() -> None:
             f"Val Loss {val_loss:.4f} Acc {val_acc:.3f} AUC {val_auc:.3f}"
         )
 
+        # Save best model — prefer AUC when available, fall back to val loss
+        improved = False
         if val_auc > best_auc:
             best_auc = val_auc
+            improved = True
+        if val_auc == 0.0 and val_loss < best_val_loss:
+            best_val_loss = val_loss
+            improved = True
+
+        if improved:
             MODEL_DIR.mkdir(exist_ok=True)
             torch.save(model.state_dict(), MODEL_DIR / "regime_gru.pt")
 
-    print(f"\nBest Val AUC: {best_auc:.4f}")
+    print(f"\nBest Val AUC: {best_auc:.4f} | Best Val Loss: {best_val_loss:.4f}")
 
     # Save TorchScript for inference
     model.load_state_dict(torch.load(MODEL_DIR / "regime_gru.pt", weights_only=True))
@@ -239,7 +251,9 @@ def main() -> None:
         all_preds.extend(probs.argmax(dim=1).cpu().numpy())
         all_labels.extend(y.numpy())
     print("\nValidation Classification Report:")
-    print(classification_report(all_labels, all_preds, target_names=["LOW_VOL", "HIGH_VOL"]))
+    unique_labels = sorted(set(all_labels))
+    names = [["LOW_VOL", "HIGH_VOL"][i] for i in unique_labels]
+    print(classification_report(all_labels, all_preds, labels=unique_labels, target_names=names))
 
     print("Done ✓")
 

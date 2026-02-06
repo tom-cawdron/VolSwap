@@ -18,7 +18,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from hmmlearn.hmm import GaussianHMM
 
-from features import FEATURE_COLS, get_feature_df
+try:
+    from src.features import FEATURE_COLS, get_feature_df
+except ImportError:
+    from features import FEATURE_COLS, get_feature_df
 
 
 # ---------------------------------------------------------------------------

@@ -95,7 +95,37 @@ $$H = -\sum_i p_i \log(p_i)$$
 
 ## Quick Start
 
-### ML Pipeline
+### One-Command Launch
+
+The easiest way to run the entire stack (install deps, train models, start API + frontend):
+
+```bash
+python launch.py
+```
+
+This will:
+1. Install Python & Node dependencies (if missing)
+2. Train HMM baseline + GRU classifier (skipped if models already exist)
+3. Start the Inference API on **http://localhost:8000**
+4. Start the Frontend on **http://localhost:3000**
+
+Press `Ctrl+C` to stop all services.
+
+#### Launcher flags
+
+| Flag | Description |
+|------|-------------|
+| `--skip-train` | Skip training, launch servers only (models must exist) |
+| `--skip-deps` | Skip pip/npm install (fastest start) |
+| `--force-train` | Retrain models from scratch |
+| `--train-only` | Train models without starting servers |
+
+### Manual Setup
+
+<details>
+<summary>Step-by-step (if you prefer not using the launcher)</summary>
+
+#### ML Pipeline
 ```bash
 pip install -r requirements.txt
 cd ml
@@ -107,10 +137,10 @@ python src/hmm.py
 python src/gru.py
 
 # Launch inference API
-uvicorn src.inference:app --reload --port 8000
+uvicorn src.inference:app --reload --port 8000 --app-dir ml
 ```
 
-### Smart Contracts (Foundry)
+#### Smart Contracts (Foundry)
 ```bash
 cd contracts
 forge install
@@ -118,18 +148,20 @@ forge build
 forge test
 ```
 
-### Oracle Bridge
+#### Oracle Bridge
 ```bash
 cd oracle
 python push_update.py
 ```
 
-### Frontend
+#### Frontend
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+
+</details>
 
 ---
 
