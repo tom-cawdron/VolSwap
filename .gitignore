@@ -51,3 +51,14 @@ logs/
 tmp/
 temp/
 *.tmp
+
+# Node / Frontend
+node_modules/
+frontend/.next/
+frontend/out/
+*.tsbuildinfo
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/lib/
