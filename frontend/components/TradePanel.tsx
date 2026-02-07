@@ -58,12 +58,17 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
     return () => clearInterval(interval);
   }, []);
 
+  // ─── Demo position (mock wallet) ───────────────────────────────────
+  const [demoPosition, setDemoPosition] = useState({ high: 0, low: 0 });
+  const [demoBuyFlash, setDemoBuyFlash] = useState(false);
+
   // ─── Simulated rounds (demo mode when contracts not deployed) ──────
   const {
     activeRound: simActive,
     pendingRounds: simPending,
     resolvedRounds: simResolved,
     roundId: simRoundId,
+    addDemoTokens,
   } = useSimulatedRound(isContractDeployed ? null : prediction);
 
   // ─── Read current round ID (on-chain) ──────────────────────────────
@@ -163,8 +168,18 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
   const tradingCountdown = Math.max(0, tradingEnd - now);
   const resolutionCountdown = Math.max(0, resolutionTime - now);
 
-  const formattedPriceHigh = priceHigh ? (Number(priceHigh) / 1e18).toFixed(4) : "0.5000";
-  const formattedPriceLow = priceLow ? (Number(priceLow) / 1e18).toFixed(4) : "0.5000";
+  // Derive prices from simulated token ratios when not on-chain
+  const simPriceHigh = activeRound
+    ? activeRound.totalHighTokens / (activeRound.totalHighTokens + activeRound.totalLowTokens)
+    : 0.5;
+  const simPriceLow = activeRound ? 1 - simPriceHigh : 0.5;
+
+  const formattedPriceHigh = priceHigh
+    ? (Number(priceHigh) / 1e18).toFixed(4)
+    : simPriceHigh.toFixed(4);
+  const formattedPriceLow = priceLow
+    ? (Number(priceLow) / 1e18).toFixed(4)
+    : simPriceLow.toFixed(4);
 
   /** 0.5% fee on every purchase */
   const FEE_RATE = 0.005;
@@ -187,7 +202,28 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
 
   // ─── Actions ───────────────────────────────────────────────────────
   const handleBuy = () => {
-    if (!amount || !isConnected || roundId === 0) return;
+    if (!amount || roundId === 0) return;
+    const tokens = parseFloat(amount);
+
+    // Demo mode: simulate the purchase locally
+    if (!isContractDeployed) {
+      const price = outcome === "CHAOTIC" ? simPriceHigh : simPriceLow;
+      const cost = tokens * price;
+      if (outcome === "CHAOTIC") {
+        setDemoPosition((p) => ({ ...p, high: p.high + tokens }));
+        addDemoTokens(tokens, 0, cost);
+      } else {
+        setDemoPosition((p) => ({ ...p, low: p.low + tokens }));
+        addDemoTokens(0, tokens, cost);
+      }
+      setAmount("");
+      // Flash effect
+      setDemoBuyFlash(true);
+      setTimeout(() => setDemoBuyFlash(false), 1200);
+      return;
+    }
+
+    if (!isConnected) return;
     writeContract({
       address: marketAddress,
       abi: MULTIVERSE_MARKET_ABI,
@@ -421,10 +457,14 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
         </button>
       ) : (
         <button
-          onClick={isConnected ? handleBuy : openConnectModal}
-          disabled={isConnected && (!amount || isPending || !isTradingOpen)}
+          onClick={!isContractDeployed ? handleBuy : isConnected ? handleBuy : openConnectModal}
+          disabled={!isContractDeployed ? (!amount || !isTradingOpen) : (isConnected && (!amount || isPending || !isTradingOpen))}
           className={`w-full rounded-xl py-3.5 font-semibold transition-all ${
-            !isConnected
+            !isContractDeployed
+              ? outcome === "CHAOTIC"
+                ? "bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20"
+                : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20"
+              : !isConnected
               ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20"
               : outcome === "CHAOTIC"
               ? "bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20"
@@ -433,6 +473,10 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
         >
           {isPending
             ? "Confirming …"
+            : !isContractDeployed
+            ? !isTradingOpen
+              ? "Trading Closed"
+              : `Bet ${outcome}`
             : !isConnected
             ? "Connect Wallet"
             : !isTradingOpen
@@ -441,7 +485,7 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
         </button>
       )}
 
-      {/* User position in this round */}
+      {/* User position in this round (on-chain) */}
       {(userHigh > 0 || userLow > 0) && (
         <div className="mt-4 rounded-xl bg-white/[0.03] border border-white/5 p-4">
           <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Your Position (Round #{roundId})</p>
@@ -455,6 +499,35 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
               <p className="text-sm font-mono text-white">{userLow.toFixed(4)}</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Demo position (mock wallet) */}
+      {!isContractDeployed && (demoPosition.high > 0 || demoPosition.low > 0) && (
+        <div className={`mt-4 rounded-xl border p-4 transition-all duration-500 ${
+          demoBuyFlash
+            ? "bg-green-500/10 border-green-500/30"
+            : "bg-white/[0.03] border-white/5"
+        }`}>
+          <div className="flex items-center gap-2 mb-2">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Your Position (Round #{roundId})</p>
+            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">
+              Demo
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-[10px] text-red-400">CHAOTIC tokens</p>
+              <p className="text-sm font-mono text-white">{demoPosition.high.toFixed(4)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-blue-400">CALM tokens</p>
+              <p className="text-sm font-mono text-white">{demoPosition.low.toFixed(4)}</p>
+            </div>
+          </div>
+          {demoBuyFlash && (
+            <p className="text-[10px] text-green-400 mt-2 animate-pulse">✓ Bet placed successfully!</p>
+          )}
         </div>
       )}
 

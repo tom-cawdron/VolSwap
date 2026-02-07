@@ -8,6 +8,8 @@ import { HEDGE_VAULT_ABI, HEDGE_VAULT_ADDRESSES } from "../lib/contracts";
 import type { AssetKey } from "../lib/types";
 import { ASSETS } from "../lib/types";
 
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
 /**
  * VaultDeposit — Deposit ETH into the HedgeVault with a configurable hedge ratio.
  * Hedge buys HIGH_VOL tokens in the current market round automatically.
@@ -20,11 +22,16 @@ interface VaultDepositProps {
 export default function VaultDeposit({ asset }: VaultDepositProps) {
   const meta = ASSETS[asset];
   const vaultAddress = HEDGE_VAULT_ADDRESSES[asset];
+  const isContractDeployed = vaultAddress !== ZERO_ADDRESS;
 
   const { address, isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
   const [depositAmount, setDepositAmount] = useState("");
   const [hedgeRatio, setHedgeRatio] = useState(10);
+
+  // Demo vault state (mock wallet)
+  const [demoVault, setDemoVault] = useState({ deposited: 0, hedgeRatio: 0, hedgeCount: 0 });
+  const [demoFlash, setDemoFlash] = useState(false);
 
   const { data: position } = useReadContract({
     address: vaultAddress,
@@ -50,7 +57,22 @@ export default function VaultDeposit({ asset }: VaultDepositProps) {
     : 0;
 
   const handleDeposit = () => {
-    if (!depositAmount || !isConnected) return;
+    if (!depositAmount) return;
+
+    // Demo mode: simulate deposit locally
+    if (!isContractDeployed) {
+      setDemoVault((v) => ({
+        deposited: v.deposited + parseFloat(depositAmount),
+        hedgeRatio,
+        hedgeCount: v.hedgeCount + 1,
+      }));
+      setDepositAmount("");
+      setDemoFlash(true);
+      setTimeout(() => setDemoFlash(false), 1200);
+      return;
+    }
+
+    if (!isConnected) return;
     writeContract({
       address: vaultAddress,
       abi: HEDGE_VAULT_ABI,
@@ -61,6 +83,11 @@ export default function VaultDeposit({ asset }: VaultDepositProps) {
   };
 
   const handleWithdraw = () => {
+    // Demo mode: reset vault
+    if (!isContractDeployed) {
+      setDemoVault({ deposited: 0, hedgeRatio: 0, hedgeCount: 0 });
+      return;
+    }
     if (!isConnected) return;
     writeContract({
       address: vaultAddress,
@@ -84,6 +111,14 @@ export default function VaultDeposit({ asset }: VaultDepositProps) {
   const existingRatio = position ? Number((position as [bigint, bigint, bigint])[1]) / 100 : 0;
   const numHedges = hedgeCount ? Number(hedgeCount) : 0;
 
+  // Use demo vault values when contracts not deployed
+  const showEth = !isContractDeployed ? demoVault.deposited.toFixed(6) : existingEth;
+  const showRatio = !isContractDeployed ? demoVault.hedgeRatio : existingRatio;
+  const showHedges = !isContractDeployed ? demoVault.hedgeCount : numHedges;
+  const hasPosition = !isContractDeployed
+    ? demoVault.deposited > 0
+    : position && ((position as [bigint, bigint, bigint])[0]) > BigInt(0);
+
   return (
     <div className="glass-card rounded-2xl p-6">
       {/* Header */}
@@ -103,22 +138,36 @@ export default function VaultDeposit({ asset }: VaultDepositProps) {
       </div>
 
       {/* Existing position */}
-      {position && ((position as [bigint, bigint, bigint])[0]) > BigInt(0) && (
-        <div className="rounded-xl bg-white/[0.03] border border-white/5 p-4 mb-6">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">Your Position</p>
+      {hasPosition && (
+        <div className={`rounded-xl border p-4 mb-6 transition-all duration-500 ${
+          demoFlash
+            ? "bg-green-500/10 border-green-500/30"
+            : "bg-white/[0.03] border-white/5"
+        }`}>
+          <div className="flex items-center gap-2 mb-3">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Your Position</p>
+            {!isContractDeployed && (
+              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                Demo
+              </span>
+            )}
+          </div>
+          {demoFlash && (
+            <p className="text-[10px] text-green-400 mb-2 animate-pulse">✓ Deposit successful!</p>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs text-gray-500">Base ETH</p>
-              <p className="text-lg font-mono font-semibold text-white">{existingEth}</p>
+              <p className="text-lg font-mono font-semibold text-white">{showEth}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500">Hedge Ratio</p>
-              <p className="text-lg font-mono font-semibold text-indigo-400">{existingRatio}%</p>
+              <p className="text-lg font-mono font-semibold text-indigo-400">{showRatio}%</p>
             </div>
           </div>
-          {numHedges > 0 && (
+          {showHedges > 0 && (
             <p className="text-[10px] text-gray-500 mt-2">
-              {numHedges} active hedge position{numHedges > 1 ? "s" : ""} across rounds
+              {showHedges} active hedge position{showHedges > 1 ? "s" : ""} across rounds
             </p>
           )}
           <button
@@ -219,14 +268,16 @@ export default function VaultDeposit({ asset }: VaultDepositProps) {
 
       {/* Deposit button */}
       <button
-        onClick={isConnected ? handleDeposit : openConnectModal}
-        disabled={isConnected && (!depositAmount || isPending)}
+        onClick={!isContractDeployed ? handleDeposit : isConnected ? handleDeposit : openConnectModal}
+        disabled={!isContractDeployed ? !depositAmount : (isConnected && (!depositAmount || isPending))}
         className="w-full rounded-xl py-3.5 font-semibold bg-indigo-600 hover:bg-indigo-500
                    text-white transition-all shadow-lg shadow-indigo-600/20
                    disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
       >
         {isPending
           ? "Confirming …"
+          : !isContractDeployed
+          ? "Deposit & Hedge"
           : isConnected
           ? "Deposit & Hedge"
           : "Connect Wallet"}

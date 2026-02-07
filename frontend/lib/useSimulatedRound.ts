@@ -43,11 +43,79 @@ export interface UseSimulatedRoundsResult {
   /** Active round ID shortcut */
   roundId: number;
   isSimulated: boolean;
+  /** Inject tokens into the active round (demo mock trades) */
+  addDemoTokens: (highTokens: number, lowTokens: number, collateral: number) => void;
 }
 
 // ─── Persistence (survives re-renders, resets on page reload) ────────
 
-let _persistedRounds: SimulatedRound[] = [];
+/** Pre-seed rounds so the demo starts mid-activity */
+function seedRounds(): SimulatedRound[] {
+  const now = Math.floor(Date.now() / 1000);
+
+  // 2 resolved rounds in the past
+  const resolved1: SimulatedRound = {
+    roundId: 1,
+    snapshotVol: 0.022,
+    tradingEnd: now - 90000,
+    resolutionTime: now - 3600,
+    totalCollateral: 2.847,
+    totalHighTokens: 1.62,
+    totalLowTokens: 1.05,
+    resolved: true,
+    highVolWon: true,
+    resolvedVol: 0.029,
+    startedAt: now - 93600,
+  };
+
+  const resolved2: SimulatedRound = {
+    roundId: 2,
+    snapshotVol: 0.031,
+    tradingEnd: now - 86400,
+    resolutionTime: now - 1800,
+    totalCollateral: 3.215,
+    totalHighTokens: 1.15,
+    totalLowTokens: 1.88,
+    resolved: true,
+    highVolWon: false,
+    resolvedVol: 0.027,
+    startedAt: now - 90000,
+  };
+
+  // 1 pending round (trading closed, awaiting resolution)
+  const pending1: SimulatedRound = {
+    roundId: 3,
+    snapshotVol: 0.026,
+    tradingEnd: now - 1200,
+    resolutionTime: now + 84600,
+    totalCollateral: 1.932,
+    totalHighTokens: 1.12,
+    totalLowTokens: 0.68,
+    resolved: false,
+    highVolWon: false,
+    resolvedVol: 0,
+    startedAt: now - 4800,
+  };
+
+  // Active round — mid-trading (started ~30 min ago, 30 min left)
+  const active: SimulatedRound = {
+    roundId: 4,
+    snapshotVol: 0.024,
+    tradingEnd: now + 1800,
+    resolutionTime: now + 1800 + 86400,
+    totalCollateral: 2.45 + Math.random() * 1.5,
+    totalHighTokens: 1.35 + Math.random() * 0.5,
+    totalLowTokens: 0.92 + Math.random() * 0.3,
+    resolved: false,
+    highVolWon: false,
+    resolvedVol: 0,
+    startedAt: now - 1800,
+  };
+
+  return [resolved1, resolved2, pending1, active];
+}
+
+let _persistedRounds: SimulatedRound[] = seedRounds();
 
 // ─── Hook ────────────────────────────────────────────────────────────
 
@@ -128,7 +196,7 @@ export function useSimulatedRound(
 
   // ── Lifecycle tick (runs every second) ───────────────────────────
   useEffect(() => {
-    // Auto-start first round when prediction data arrives
+    // Auto-start first round when prediction data arrives (only if no seeded rounds)
     if (rounds.length === 0 && prediction) {
       const first = createRound(0);
       updateRounds([first]);
@@ -202,5 +270,20 @@ export function useSimulatedRound(
     allRounds: rounds,
     roundId: activeRound?.roundId ?? (rounds.length > 0 ? rounds[rounds.length - 1].roundId : 0),
     isSimulated: true,
+    /** Inject tokens into the active round (for demo mock trades) */
+    addDemoTokens: (highTokens: number, lowTokens: number, collateral: number) => {
+      if (!activeRound) return;
+      const updated = _persistedRounds.map((r) =>
+        r.roundId === activeRound.roundId
+          ? {
+              ...r,
+              totalHighTokens: r.totalHighTokens + highTokens,
+              totalLowTokens: r.totalLowTokens + lowTokens,
+              totalCollateral: r.totalCollateral + collateral,
+            }
+          : r,
+      );
+      updateRounds(updated);
+    },
   };
 }

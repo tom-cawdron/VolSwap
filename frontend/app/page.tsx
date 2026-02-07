@@ -44,6 +44,12 @@ export default function Home() {
             )}
 
             {/* Wallet connection */}
+            {isDemo ? (
+              <div className="px-4 py-2 rounded-xl text-sm font-medium bg-white/5 border border-white/10 text-gray-300 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-violet-400" />
+                demo.eth
+              </div>
+            ) : (
             <ConnectButton.Custom>
               {({ account, chain, openAccountModal, openChainModal, openConnectModal, mounted }) => {
                 const connected = mounted && account && chain;
@@ -76,6 +82,7 @@ export default function Home() {
                 );
               }}
             </ConnectButton.Custom>
+            )}
           </div>
         </div>
       </nav>

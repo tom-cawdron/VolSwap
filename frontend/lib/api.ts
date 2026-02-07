@@ -20,41 +20,52 @@ const POLL_INTERVAL_MS = 30_000; // 30 seconds
 
 // ─── Demo data (shown when inference API is unavailable) ─────────────
 
-const DEMO_PREDICTIONS: Record<AssetKey, RegimePrediction> = {
-  eth: {
-    asset: "eth",
-    p_high_vol: 0.827,
-    p_low_vol: 0.173,
-    entropy: 0.46,
-    regime: "HIGH_VOL",
-    confidence: 0.827,
-    realised_vol_24h: 0.025,
-    timestamp: Math.floor(Date.now() / 1000),
-    model_hash: "demo_eth_000000000000",
-  },
-  btc: {
-    asset: "btc",
-    p_high_vol: 0.445,
-    p_low_vol: 0.555,
-    entropy: 0.69,
-    regime: "LOW_VOL",
-    confidence: 0.555,
-    realised_vol_24h: 0.018,
-    timestamp: Math.floor(Date.now() / 1000),
-    model_hash: "demo_btc_000000000000",
-  },
-  sol: {
-    asset: "sol",
-    p_high_vol: 0.453,
-    p_low_vol: 0.547,
-    entropy: 0.68,
-    regime: "LOW_VOL",
-    confidence: 0.547,
-    realised_vol_24h: 0.035,
-    timestamp: Math.floor(Date.now() / 1000),
-    model_hash: "demo_sol_000000000000",
-  },
+/** Clamp a number between min and max */
+function clamp(v: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, v));
+}
+
+/** Drift a value by a small random step, clamped */
+function drift(v: number, step: number, min: number, max: number) {
+  return clamp(v + (Math.random() - 0.5) * step, min, max);
+}
+
+/** Mutable seed values that drift over time */
+const _demoState: Record<AssetKey, { p_high: number; vol: number; entropy: number }> = {
+  eth: { p_high: 0.827, vol: 0.025, entropy: 0.46 },
+  btc: { p_high: 0.445, vol: 0.018, entropy: 0.69 },
+  sol: { p_high: 0.453, vol: 0.035, entropy: 0.68 },
 };
+
+/** Generate demo predictions with drifting values */
+function generateDemoPredictions(): Record<AssetKey, RegimePrediction> {
+  const now = Math.floor(Date.now() / 1000);
+  const result = {} as Record<AssetKey, RegimePrediction>;
+
+  for (const key of ["eth", "btc", "sol"] as AssetKey[]) {
+    const s = _demoState[key];
+    // Drift each value
+    s.p_high = drift(s.p_high, 0.03, 0.08, 0.92);
+    s.vol = drift(s.vol, 0.003, 0.005, 0.08);
+    s.entropy = drift(s.entropy, 0.02, 0.15, 0.95);
+
+    const p_low = 1 - s.p_high;
+    result[key] = {
+      asset: key,
+      p_high_vol: s.p_high,
+      p_low_vol: p_low,
+      entropy: s.entropy,
+      regime: s.p_high > 0.5 ? "HIGH_VOL" : "LOW_VOL",
+      confidence: Math.max(s.p_high, p_low),
+      realised_vol_24h: s.vol,
+      timestamp: now,
+      model_hash: `demo_${key}_000000000000`,
+    };
+  }
+  return result;
+}
+
+const DEMO_PREDICTIONS = generateDemoPredictions();
 
 // ─── Fetch helpers ───────────────────────────────────────────────────
 
@@ -92,6 +103,7 @@ export function usePredictions(): UsePredictionsResult {
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [isDemo, setIsDemo] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const demoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -111,7 +123,7 @@ export function usePredictions(): UsePredictionsResult {
       setIsDemo(false);
     } catch (err: unknown) {
       // Fall back to demo data so the UI always looks full
-      setPredictions({ ...DEMO_PREDICTIONS });
+      setPredictions(generateDemoPredictions());
       setLastUpdated(Math.floor(Date.now() / 1000));
       setError(err instanceof Error ? err.message : "Unknown error");
       setIsDemo(true);
@@ -127,6 +139,21 @@ export function usePredictions(): UsePredictionsResult {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [load]);
+
+  // Drift demo values every 5 seconds when in demo mode
+  useEffect(() => {
+    if (isDemo) {
+      demoIntervalRef.current = setInterval(() => {
+        setPredictions(generateDemoPredictions());
+        setLastUpdated(Math.floor(Date.now() / 1000));
+      }, 5000);
+    } else {
+      if (demoIntervalRef.current) clearInterval(demoIntervalRef.current);
+    }
+    return () => {
+      if (demoIntervalRef.current) clearInterval(demoIntervalRef.current);
+    };
+  }, [isDemo]);
 
   return { predictions, isLoading, error, lastUpdated, isDemo, refresh: load };
 }
