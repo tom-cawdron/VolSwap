@@ -1,34 +1,45 @@
 """
-Hidden Markov Model (HMM) Baseline for Regime Detection.
+Multi-Asset HMM Regime Detection — Ground Truth Label Generation.
 
-Fits a 2-state Gaussian HMM on volatility features to produce
-ground-truth regime labels used to train the XGBoost classifier.
+Fits a 2-state Gaussian HMM **per asset** on that asset's own
+[realised_vol_24h, vol_of_vol] to produce ground-truth regime labels.
 
-Migration note (Feb 2026):
-    - Added explicit label-swap check (means_[0] > means_[1] → swap)
-      to guarantee label 1 = HIGH_VOL regardless of HMM initialisation.
-    - Output CSV now includes GARCH(1,1) features alongside the base
-      technical features, ready for direct consumption by xgboost_model.py.
+Isolation rule:
+    HMM only sees self-asset volatility features.
+    No cross-asset features. No GARCH features.
+
+Artefacts per asset:
+    models/hmm_{asset}.pkl          — fitted HMM model
+    data/labelled_{asset}.csv       — full feature matrix + regime_label
+    data/hmm_regimes_{asset}.png    — regime visualisation
 
 Usage:
-    python -m src.hmm          # run from ml/ directory
-    python ml/src/hmm.py       # run from repo root
+    python -m src.hmm                   # all 3 assets
+    python -m src.hmm --asset eth       # single asset
 """
 
-import os
+import argparse
 import pickle
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from hmmlearn.hmm import GaussianHMM
 
 try:
-    from src.features import HMM_FEATURE_COLS, get_feature_df
+    from src.features import (
+        ASSETS, ASSET_SHORT, HMM_FEATURE_COLS,
+        build_feature_matrix, fetch_all_ohlcv,
+    )
 except ImportError:
-    from features import HMM_FEATURE_COLS, get_feature_df
-
+    from features import (
+        ASSETS, ASSET_SHORT, HMM_FEATURE_COLS,
+        build_feature_matrix, fetch_all_ohlcv,
+    )
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -41,7 +52,7 @@ DATA_DIR.mkdir(exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
-# HMM Training
+# HMM Training (generic, per-asset)
 # ---------------------------------------------------------------------------
 
 def fit_hmm(
@@ -70,75 +81,130 @@ def label_regimes(model: GaussianHMM, features: np.ndarray) -> np.ndarray:
     with the higher mean realised-vol gets label 1 (HIGH_VOL).
     """
     raw_labels = model.predict(features)
-
-    # Identify which state has higher mean of the first feature (realised_vol_24h)
     means = model.means_[:, 0]  # first feature = realised_vol_24h
     high_state = int(np.argmax(means))
-
-    # Remap: high_state → 1, other → 0
     if high_state == 1:
-        return raw_labels  # already correct
-    return 1 - raw_labels  # flip
+        return raw_labels
+    return 1 - raw_labels
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+def fit_hmm_for_asset(
+    asset_symbol: str,
+    feature_df: pd.DataFrame,
+) -> tuple[GaussianHMM, pd.DataFrame]:
+    """
+    Fit HMM for one asset and add regime_label column to its feature df.
 
-def main() -> None:
-    print("=" * 60)
-    print("HMM Regime Detection — Ground Truth Label Generation")
-    print("=" * 60)
+    Parameters
+    ----------
+    asset_symbol : str
+        e.g. "ETH/USDT"
+    feature_df : pd.DataFrame
+        Full feature matrix (from build_feature_matrix) for this asset.
 
-    # 1. Fetch and engineer features (including GARCH)
-    print("\n[1/4] Fetching data and engineering features (incl. GARCH) …")
-    df = get_feature_df(symbol="ETH/USDT", timeframe="1h", limit=5000)
-    hmm_features = df[HMM_FEATURE_COLS].values
+    Returns
+    -------
+    (model, labelled_df)
+    """
+    short = ASSET_SHORT[asset_symbol]
+    print(f"\n--- HMM for {asset_symbol} ({short}) ---")
+
+    # HMM only sees self-asset volatility features
+    hmm_features = feature_df[HMM_FEATURE_COLS].values
     print(f"  HMM input features: {HMM_FEATURE_COLS}")
     print(f"  HMM feature matrix shape: {hmm_features.shape}")
-    print(f"  Total columns (with GARCH): {len(df.columns)}")
 
-    # 2. Fit HMM (only on pure volatility features — no GARCH inputs)
-    print("\n[2/4] Fitting 2-state Gaussian HMM …")
     model = fit_hmm(hmm_features)
     print(f"  Converged: {model.monitor_.converged}")
     print(f"  Log-likelihood: {model.score(hmm_features):.2f}")
     print(f"  State means:\n{model.means_}")
 
-    # 3. Label regimes
-    print("\n[3/4] Generating regime labels …")
-    df["regime_label"] = label_regimes(model, hmm_features)
-    regime_counts = df["regime_label"].value_counts()
-    print(f"  LOW_VOL (0): {regime_counts.get(0, 0)} samples")
-    print(f"  HIGH_VOL (1): {regime_counts.get(1, 0)} samples")
+    feature_df = feature_df.copy()
+    feature_df["regime_label"] = label_regimes(model, hmm_features)
+    counts = feature_df["regime_label"].value_counts()
+    print(f"  LOW_VOL (0): {counts.get(0, 0)} | HIGH_VOL (1): {counts.get(1, 0)}")
 
-    # 4. Save artefacts
-    print("\n[4/4] Saving artefacts …")
-    hmm_path = MODEL_DIR / "hmm_baseline.pkl"
+    # Save model
+    hmm_path = MODEL_DIR / f"hmm_{short}.pkl"
     with open(hmm_path, "wb") as f:
         pickle.dump(model, f)
-    print(f"  HMM model → {hmm_path}")
+    print(f"  Model → {hmm_path}")
 
-    labelled_path = DATA_DIR / "labelled_features.csv"
-    df.to_csv(labelled_path)
-    print(f"  Labelled data → {labelled_path}")
+    # Save labelled CSV
+    csv_path = DATA_DIR / f"labelled_{short}.csv"
+    feature_df.to_csv(csv_path)
+    print(f"  Data  → {csv_path}")
 
-    # Quick visualisation
+    # Plot
     fig, axes = plt.subplots(2, 1, figsize=(14, 6), sharex=True)
-    axes[0].plot(df.index, df["realised_vol_24h"], linewidth=0.6)
+    axes[0].plot(feature_df.index, feature_df["realised_vol_24h"], linewidth=0.6)
     axes[0].set_ylabel("Realised Vol (24h)")
-    axes[0].set_title("ETH/USDT Realised Volatility with HMM Regime Labels")
+    axes[0].set_title(f"{asset_symbol} Realised Volatility with HMM Regime Labels")
 
-    colours = df["regime_label"].map({0: "steelblue", 1: "crimson"})
-    axes[1].scatter(df.index, df["realised_vol_24h"], c=colours, s=1, alpha=0.7)
+    colours = feature_df["regime_label"].map({0: "steelblue", 1: "crimson"})
+    axes[1].scatter(feature_df.index, feature_df["realised_vol_24h"], c=colours, s=1, alpha=0.7)
     axes[1].set_ylabel("Realised Vol (24h)")
     axes[1].set_xlabel("Time")
 
     fig.tight_layout()
-    plot_path = DATA_DIR / "hmm_regimes.png"
+    plot_path = DATA_DIR / f"hmm_regimes_{short}.png"
     fig.savefig(plot_path, dpi=150)
-    print(f"  Plot → {plot_path}")
     plt.close(fig)
+    print(f"  Plot  → {plot_path}")
+
+    return model, feature_df
+
+
+def fit_all_hmms(
+    all_ohlcv: dict[str, pd.DataFrame] | None = None,
+) -> dict[str, pd.DataFrame]:
+    """
+    Fit HMM for all assets. Returns dict of labelled DataFrames.
+
+    If all_ohlcv is None, fetches data automatically.
+    """
+    if all_ohlcv is None:
+        print("[1/2] Fetching data for all assets …")
+        all_ohlcv = fetch_all_ohlcv(limit=5000)
+
+    print("[2/2] Building features and fitting HMMs …")
+    labelled: dict[str, pd.DataFrame] = {}
+    for sym in ASSETS:
+        df = build_feature_matrix(sym, all_ohlcv, include_garch=True)
+        _, labelled_df = fit_hmm_for_asset(sym, df)
+        labelled[sym] = labelled_df
+
+    return labelled
+
+
+# ---------------------------------------------------------------------------
+# Main (standalone usage)
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="HMM regime labelling")
+    parser.add_argument(
+        "--asset", type=str, default=None,
+        help="Single asset short name (eth/btc/sol). Omit for all.",
+    )
+    args = parser.parse_args()
+
+    print("=" * 60)
+    print("HMM Regime Detection — Ground Truth Label Generation")
+    print("=" * 60)
+
+    if args.asset:
+        short_to_sym = {v: k for k, v in ASSET_SHORT.items()}
+        sym = short_to_sym.get(args.asset.lower())
+        if sym is None:
+            print(f"Unknown asset: {args.asset}. Use eth/btc/sol.")
+            return
+        print(f"\nFetching data for {sym} (+ cross-asset data) …")
+        all_ohlcv = fetch_all_ohlcv(limit=5000)
+        df = build_feature_matrix(sym, all_ohlcv, include_garch=True)
+        fit_hmm_for_asset(sym, df)
+    else:
+        fit_all_hmms()
 
     print("\nDone ✓")
 

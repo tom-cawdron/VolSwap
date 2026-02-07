@@ -52,21 +52,19 @@ def install_deps():
 
 
 def train_models():
-    """Train HMM + XGBoost if model files don't exist."""
-    hmm_ok = (MODELS_DIR / "hmm_baseline.pkl").exists()
-    xgb_ok = (MODELS_DIR / "xgb_regime.joblib").exists()
+    """Train HMM + XGBoost for all assets if model files don't exist."""
+    all_ok = all(
+        (MODELS_DIR / f"hmm_{a}.pkl").exists() and
+        (MODELS_DIR / f"xgb_{a}.joblib").exists()
+        for a in ("eth", "btc", "sol")
+    )
 
-    if hmm_ok and xgb_ok:
-        print(">> Models already trained. Use --force-train to retrain.")
+    if all_ok:
+        print(">> All models already trained. Use --force-train to retrain.")
         return
 
-    if not hmm_ok:
-        print(">> Training HMM baseline (2-state regime labeller)...")
-        run([PYTHON, "src/hmm.py"], cwd=ML_DIR)
-
-    if not xgb_ok:
-        print(">> Training XGBoost classifier (GARCH features + Platt scaling)...")
-        run([PYTHON, "src/xgboost_model.py"], cwd=ML_DIR)
+    print(">> Running full training pipeline (ETH, BTC, SOL) ...")
+    run([PYTHON, "src/train_pipeline.py"], cwd=ML_DIR)
 
     print(">> Models ready.")
 

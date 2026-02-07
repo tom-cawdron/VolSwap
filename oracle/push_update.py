@@ -1,12 +1,18 @@
 """
-Oracle Bridge — Push ML regime updates on-chain.
+Multi-Asset Oracle Bridge — Push ML regime updates on-chain.
 
-Reads regime probabilities from the FastAPI inference service
-and pushes them to the RegimeOracle.sol contract.
+Reads regime probabilities for ETH, BTC, and SOL from the inference API
+(/predict/all) and pushes each to its own RegimeOracle contract address.
+
+Environment variables (per-asset oracle addresses):
+    ORACLE_ADDRESS_ETH   — RegimeOracle address for ETH
+    ORACLE_ADDRESS_BTC   — RegimeOracle address for BTC
+    ORACLE_ADDRESS_SOL   — RegimeOracle address for SOL
 
 Usage:
-    python push_update.py                         # one-shot
+    python push_update.py                         # one-shot, all assets
     python push_update.py --loop --interval 14400 # every 4h
+    python push_update.py --asset eth             # single asset
 """
 
 import argparse
@@ -27,10 +33,18 @@ load_dotenv()
 # Configuration
 # ---------------------------------------------------------------------------
 
-INFERENCE_URL = os.getenv("INFERENCE_URL", "http://localhost:8000/predict")
-RPC_URL = os.getenv("RPC_URL", "http://127.0.0.1:8545")  # local Anvil by default
-ORACLE_ADDRESS = os.getenv("ORACLE_ADDRESS", "")
+INFERENCE_URL = os.getenv("INFERENCE_URL", "http://localhost:8000")
+RPC_URL = os.getenv("RPC_URL", "http://127.0.0.1:8545")
 PRIVATE_KEY = os.getenv("ORACLE_PRIVATE_KEY", "")
+
+# Per-asset oracle contract addresses
+ORACLE_ADDRESSES: dict[str, str] = {
+    "eth": os.getenv("ORACLE_ADDRESS_ETH", os.getenv("ORACLE_ADDRESS", "")),
+    "btc": os.getenv("ORACLE_ADDRESS_BTC", ""),
+    "sol": os.getenv("ORACLE_ADDRESS_SOL", ""),
+}
+
+VALID_ASSETS = ["eth", "btc", "sol"]
 
 # Minimal ABI for RegimeOracle.pushUpdate and postCommit
 ORACLE_ABI = [
@@ -85,27 +99,34 @@ def to_uint256(prob: float) -> int:
     return int(prob * 1e18)
 
 
-def fetch_prediction() -> dict:
-    """Call the inference API and return the prediction."""
-    resp = requests.get(INFERENCE_URL, timeout=30)
+def fetch_all_predictions() -> list[dict]:
+    """Call /predict/all and return list of prediction dicts."""
+    url = f"{INFERENCE_URL.rstrip('/')}/predict/all"
+    resp = requests.get(url, timeout=60)
+    resp.raise_for_status()
+    data = resp.json()
+    return data["predictions"]
+
+
+def fetch_single_prediction(asset: str) -> dict:
+    """Call /predict/{asset} and return the prediction dict."""
+    url = f"{INFERENCE_URL.rstrip('/')}/predict/{asset}"
+    resp = requests.get(url, timeout=60)
     resp.raise_for_status()
     return resp.json()
 
 
-def compute_model_hash(model_path: str | None = None) -> bytes:
+def compute_model_hash(asset: str = "eth") -> bytes:
     """
     Compute the SHA-256 hash of the model weights file.
     Returns 32-byte hash suitable for bytes32 in Solidity.
     """
-    if model_path is None:
-        model_path = str(
-            Path(__file__).resolve().parents[1] / "ml" / "models" / "regime_gru.pt"
-        )
-    if not Path(model_path).exists():
+    model_path = Path(__file__).resolve().parents[1] / "ml" / "models" / f"xgb_{asset}.joblib"
+    if not model_path.exists():
         print(f"WARNING: Model file not found at {model_path}, using zero hash.")
         return b"\x00" * 32
 
-    raw = Path(model_path).read_bytes()
+    raw = model_path.read_bytes()
     return hashlib.sha256(raw).digest()
 
 
@@ -165,76 +186,90 @@ def post_commit(w3: Web3, contract, account, prediction: dict, nonce: int) -> st
 
 
 # ---------------------------------------------------------------------------
+# Per-asset push
+# ---------------------------------------------------------------------------
+
+def push_asset(w3: Web3, account, prediction: dict) -> None:
+    """Push a single asset's prediction on-chain."""
+    asset = prediction["asset"]
+    oracle_addr = ORACLE_ADDRESSES.get(asset, "")
+
+    if not oracle_addr:
+        print(f"  [{asset.upper()}] No oracle address configured — skipping on-chain push.")
+        print(f"    P(HIGH_VOL) = {prediction['p_high_vol']:.4f}")
+        print(f"    Regime      = {prediction['regime']}")
+        return
+
+    contract = w3.eth.contract(
+        address=Web3.to_checksum_address(oracle_addr),
+        abi=ORACLE_ABI,
+    )
+
+    model_hash = compute_model_hash(asset)
+    tx_hash = push_update(w3, contract, account, prediction, model_hash)
+
+    print(f"  [{asset.upper()}] TX: {tx_hash}")
+    print(f"    P(HIGH_VOL) = {prediction['p_high_vol']:.4f}")
+    print(f"    Regime      = {prediction['regime']}")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
-def run_once():
-    """Execute a single predict → push cycle."""
+def run_once(asset_filter: str | None = None):
+    """Execute a single predict → push cycle for all (or one) asset(s)."""
     print("=" * 60)
     print(f"Oracle Push Update — {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
-    # 1. Connect
+    # 1. Connect to chain
     w3 = Web3(Web3.HTTPProvider(RPC_URL))
     if not w3.is_connected():
         print(f"ERROR: Cannot connect to {RPC_URL}")
         sys.exit(1)
     print(f"Connected to chain ID {w3.eth.chain_id}")
 
-    if not ORACLE_ADDRESS:
-        print("ERROR: Set ORACLE_ADDRESS env var")
+    if not PRIVATE_KEY:
+        print("ERROR: Set ORACLE_PRIVATE_KEY env var")
         sys.exit(1)
 
-    contract = w3.eth.contract(
-        address=Web3.to_checksum_address(ORACLE_ADDRESS),
-        abi=ORACLE_ABI,
-    )
     account = w3.eth.account.from_key(PRIVATE_KEY)
     print(f"Operator: {account.address}")
 
-    # 2. Fetch prediction
-    print("\nFetching prediction from inference API …")
-    prediction = fetch_prediction()
-    print(f"  P(HIGH_VOL) = {prediction['p_high_vol']:.4f}")
-    print(f"  P(LOW_VOL)  = {prediction['p_low_vol']:.4f}")
-    print(f"  Entropy     = {prediction['entropy']:.4f}")
-    print(f"  Regime      = {prediction['regime']}")
+    # 2. Fetch predictions
+    if asset_filter:
+        print(f"\nFetching prediction for {asset_filter} …")
+        predictions = [fetch_single_prediction(asset_filter)]
+    else:
+        print("\nFetching predictions for all assets …")
+        predictions = fetch_all_predictions()
 
-    # 3. Model hash
-    model_hash = compute_model_hash()
-
-    # 4. Push on-chain
-    print("\nPushing update on-chain …")
-    tx_hash = push_update(w3, contract, account, prediction, model_hash)
-    print(f"  TX hash: {tx_hash}")
-
-    # 5. Verify
-    latest = contract.functions.latestUpdate().call()
-    print(f"\nOn-chain verification:")
-    print(f"  pHighVol  = {latest[0] / 1e18:.6f}")
-    print(f"  pLowVol   = {latest[1] / 1e18:.6f}")
-    print(f"  entropy   = {latest[2] / 1e18:.6f}")
-    print(f"  timestamp = {latest[3]}")
+    # 3. Push each
+    print("\nPushing updates on-chain …")
+    for pred in predictions:
+        push_asset(w3, account, pred)
 
     print("\nDone ✓")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Push regime update to oracle contract")
+    parser = argparse.ArgumentParser(description="Push regime updates to oracle contracts")
     parser.add_argument("--loop", action="store_true", help="Run continuously")
     parser.add_argument("--interval", type=int, default=14400, help="Seconds between updates (default: 4h)")
+    parser.add_argument("--asset", type=str, default=None, help="Single asset (eth/btc/sol)")
     args = parser.parse_args()
 
     if args.loop:
         print(f"Running in loop mode (interval = {args.interval}s)")
         while True:
             try:
-                run_once()
+                run_once(asset_filter=args.asset)
             except Exception as e:
                 print(f"ERROR: {e}")
             time.sleep(args.interval)
     else:
-        run_once()
+        run_once(asset_filter=args.asset)
 
 
 if __name__ == "__main__":
