@@ -12,9 +12,7 @@ A volatility prediction market powered by XGBoost regime detection, LMSR pricing
 |------|------|------------|--------------|
 | ML Lead | Tom Cawdron | LSE (Mathematics with Data Science) | Feature engineering, XGBoost training, calibration, inference API |
 | Quant / Econ | Ilyes Kallel | UCL | LMSR maths, dynamic fee derivation, pitch deck economics |
-| Smart Contract Dev | Filippo | UCL | Solidity contracts, testing, deployment to testnet |
-
-**Sponsors:** Flare (FTSO price feeds) · Sui (Smart contracts)
+| Smart Contract Dev | Filippo Piglia | UCL | Solidity contracts, testing, deployment to testnet |
 
 ---
 
@@ -297,25 +295,6 @@ volswap/
 - **Model improvement:** Trading data → labelled outcomes → retrain ML → better predictions
 - **Network effects:** Integration as regime oracle creates switching costs
 
----
-
-## Status
-
-- [x] Project scaffolding & architecture
-- [x] Multi-asset feature engineering (14 features, 3 assets)
-- [x] HMM baseline (ground truth labels for ETH, BTC, SOL)
-- [x] XGBoost regime classifiers (Platt-scaled, per asset)
-- [x] FastAPI inference API (multi-asset, live data)
-- [x] RegimeOracle.sol
-- [x] MultiverseMarket.sol (LMSR + entropy-adaptive fees + hourly rounds)
-- [x] HedgeVault.sol
-- [x] Oracle bridge script
-- [x] Frontend — VolSwap branding, CHAOTIC/CALM betting, regime gauges
-- [x] One-command launcher (`launch.py`)
-- [ ] Foundry tests
-- [ ] Base Sepolia deployment
-- [ ] Calibration plots & model transparency page
-- [ ] Pitch deck
 
 ---
 
