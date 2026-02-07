@@ -8,7 +8,7 @@ import { MULTIVERSE_MARKET_ABI, MULTIVERSE_MARKET_ADDRESSES } from "../lib/contr
 import { useSimulatedRound } from "../lib/useSimulatedRound";
 import type { SimulatedRound } from "../lib/useSimulatedRound";
 import type { AssetKey, RegimePrediction } from "../lib/types";
-import { ASSETS } from "../lib/types";
+import { ASSETS, ASSET_KEYS } from "../lib/types";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
@@ -58,18 +58,22 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
     return () => clearInterval(interval);
   }, []);
 
-  // ─── Demo position (mock wallet) ───────────────────────────────────
-  const [demoPosition, setDemoPosition] = useState({ high: 0, low: 0 });
+  // ─── Demo position (mock wallet) — per-asset ──────────────────────
+  const [demoPositions, setDemoPositions] = useState<Record<AssetKey, { high: number; low: number }>>({
+    eth: { high: 0, low: 0 },
+    btc: { high: 0, low: 0 },
+    sol: { high: 0, low: 0 },
+  });
+  const demoPosition = demoPositions[asset];
   const [demoBuyFlash, setDemoBuyFlash] = useState(false);
 
   // ─── Simulated rounds (demo mode when contracts not deployed) ──────
   const {
     activeRound: simActive,
     pendingRounds: simPending,
-    resolvedRounds: simResolved,
     roundId: simRoundId,
     addDemoTokens,
-  } = useSimulatedRound(isContractDeployed ? null : prediction);
+  } = useSimulatedRound(asset, isContractDeployed ? null : prediction);
 
   // ─── Read current round ID (on-chain) ──────────────────────────────
   const { data: currentRoundId } = useReadContract({
@@ -196,9 +200,8 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
     : 0;
   const estimatedCost = amount ? (rawCost * (1 + FEE_RATE)).toFixed(6) : "0";
 
-  // Pending + resolved from simulation
+  // Pending from simulation
   const pendingRounds = isContractDeployed ? [] : simPending;
-  const resolvedRounds = isContractDeployed ? [] : simResolved;
 
   // ─── Actions ───────────────────────────────────────────────────────
   const handleBuy = () => {
@@ -210,10 +213,10 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
       const price = outcome === "CHAOTIC" ? simPriceHigh : simPriceLow;
       const cost = tokens * price;
       if (outcome === "CHAOTIC") {
-        setDemoPosition((p) => ({ ...p, high: p.high + tokens }));
+        setDemoPositions((p) => ({ ...p, [asset]: { ...p[asset], high: p[asset].high + tokens } }));
         addDemoTokens(tokens, 0, cost);
       } else {
-        setDemoPosition((p) => ({ ...p, low: p.low + tokens }));
+        setDemoPositions((p) => ({ ...p, [asset]: { ...p[asset], low: p[asset].low + tokens } }));
         addDemoTokens(0, tokens, cost);
       }
       setAmount("");
@@ -541,30 +544,6 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
           Correct callers split the entire pool proportionally.
         </p>
       </div>
-
-      {/* ─── Resolved Rounds ───────────────────────────────────────── */}
-      {resolvedRounds.length > 0 && (
-        <div className="mt-5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">Recent Results</p>
-          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-            {resolvedRounds.map((r: SimulatedRound) => (
-              <SimResolvedRow key={r.roundId} round={r} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* On-chain round history */}
-      {isContractDeployed && onChainRoundId > 1 && (
-        <div className="mt-5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">Past Rounds</p>
-          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-            {Array.from({ length: Math.min(onChainRoundId - 1, 10) }, (_, i) => onChainRoundId - 1 - i).map((rid) => (
-              <OnChainPastRoundRow key={rid} roundId={rid} marketAddress={marketAddress} />
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -584,73 +563,6 @@ function PendingRoundRow({ round: r, now }: { round: SimulatedRound; now: number
       <div className="flex items-center gap-4 text-gray-400 font-mono">
         <span>Snap: {(r.snapshotVol * 100).toFixed(2)}%</span>
         <span className="text-yellow-400">{formatCountdown(countdown)}</span>
-        <span className="text-gray-500">{pool.toFixed(3)} ETH</span>
-      </div>
-    </div>
-  );
-}
-
-/* ─── Resolved Round Row (simulated) ──────────────────────────────── */
-
-function SimResolvedRow({ round: r }: { round: SimulatedRound }) {
-  return (
-    <div className="rounded-lg bg-white/[0.02] border border-white/5 px-3 py-2 flex items-center justify-between text-xs">
-      <div className="flex items-center gap-3">
-        <span className="text-gray-500 font-mono">#{r.roundId}</span>
-        <span className={`font-semibold ${r.highVolWon ? "text-red-400" : "text-blue-400"}`}>
-          {r.highVolWon ? "CHAOTIC" : "CALM"}
-        </span>
-      </div>
-      <div className="flex items-center gap-4 text-gray-400 font-mono">
-        <span>
-          {(r.snapshotVol * 100).toFixed(2)}% → {(r.resolvedVol * 100).toFixed(2)}%
-        </span>
-        <span className="text-gray-500">{r.totalCollateral.toFixed(3)} ETH</span>
-      </div>
-    </div>
-  );
-}
-
-/* ─── On-chain Past Round Row ─────────────────────────────────────── */
-
-function OnChainPastRoundRow({ roundId, marketAddress }: { roundId: number; marketAddress: `0x${string}` }) {
-  const { data: roundData } = useReadContract({
-    address: marketAddress,
-    abi: MULTIVERSE_MARKET_ABI,
-    functionName: "getRound",
-    args: [BigInt(roundId)],
-  });
-
-  const r = roundData as
-    | {
-        snapshotVol: bigint;
-        totalCollateral: bigint;
-        resolved: boolean;
-        highVolWon: boolean;
-        resolvedVol: bigint;
-      }
-    | undefined;
-
-  if (!r) return null;
-
-  const snap = Number(r.snapshotVol) / 1e18;
-  const resVol = Number(r.resolvedVol) / 1e18;
-  const pool = Number(r.totalCollateral) / 1e18;
-
-  return (
-    <div className="rounded-lg bg-white/[0.02] border border-white/5 px-3 py-2 flex items-center justify-between text-xs">
-      <div className="flex items-center gap-3">
-        <span className="text-gray-500 font-mono">#{roundId}</span>
-        {r.resolved ? (
-          <span className={`font-semibold ${r.highVolWon ? "text-red-400" : "text-blue-400"}`}>
-            {r.highVolWon ? "CHAOTIC" : "CALM"}
-          </span>
-        ) : (
-          <span className="text-yellow-400">Pending</span>
-        )}
-      </div>
-      <div className="flex items-center gap-4 text-gray-400 font-mono">
-        <span>{(snap * 100).toFixed(2)}% → {resVol > 0 ? (resVol * 100).toFixed(2) + "%" : "…"}</span>
         <span className="text-gray-500">{pool.toFixed(3)} ETH</span>
       </div>
     </div>

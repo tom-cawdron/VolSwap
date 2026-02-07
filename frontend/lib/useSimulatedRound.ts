@@ -134,14 +134,22 @@ let _persistedRounds: SimulatedRound[] = seedRounds();
  * rounds N+1, N+2, … can be open for trading.
  */
 export function useSimulatedRound(
+  asset: AssetKey,
   prediction: RegimePrediction | null | undefined,
 ): UseSimulatedRoundsResult {
-  const [rounds, setRounds] = useState<SimulatedRound[]>(_persistedRounds);
+  const [rounds, setRounds] = useState<SimulatedRound[]>(() => _persistedRounds[asset] ?? []);
   const predRef = useRef(prediction);
   predRef.current = prediction;
+  const assetRef = useRef(asset);
+
+  // Sync rounds when asset changes
+  useEffect(() => {
+    assetRef.current = asset;
+    setRounds(_persistedRounds[asset] ?? []);
+  }, [asset]);
 
   const updateRounds = useCallback((newRounds: SimulatedRound[]) => {
-    _persistedRounds = newRounds;
+    _persistedRounds[assetRef.current] = newRounds;
     setRounds(newRounds);
   }, []);
 
@@ -205,7 +213,7 @@ export function useSimulatedRound(
 
     const interval = setInterval(() => {
       const now = Math.floor(Date.now() / 1000);
-      let current = [..._persistedRounds];
+      let current = [..._persistedRounds[assetRef.current]];
       let changed = false;
 
       // 1. Resolve any rounds past their resolution time
@@ -258,22 +266,17 @@ export function useSimulatedRound(
 
   const activeRound = rounds.find((r) => !r.resolved && now < r.tradingEnd) ?? null;
   const pendingRounds = rounds.filter((r) => !r.resolved && now >= r.tradingEnd);
-  const resolvedRounds = rounds
-    .filter((r) => r.resolved)
-    .slice(-10)
-    .reverse();
 
   return {
     activeRound,
     pendingRounds,
-    resolvedRounds,
     allRounds: rounds,
     roundId: activeRound?.roundId ?? (rounds.length > 0 ? rounds[rounds.length - 1].roundId : 0),
     isSimulated: true,
     /** Inject tokens into the active round (for demo mock trades) */
     addDemoTokens: (highTokens: number, lowTokens: number, collateral: number) => {
       if (!activeRound) return;
-      const updated = _persistedRounds.map((r) =>
+      const updated = _persistedRounds[assetRef.current].map((r) =>
         r.roundId === activeRound.roundId
           ? {
               ...r,
