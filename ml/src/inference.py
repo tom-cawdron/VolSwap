@@ -25,6 +25,7 @@ from typing import Any
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 try:
@@ -67,6 +68,14 @@ app = FastAPI(
     version="0.3.0",
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 class RegimePrediction(BaseModel):
     asset: str
@@ -75,6 +84,7 @@ class RegimePrediction(BaseModel):
     entropy: float
     regime: str
     confidence: float
+    realised_vol_24h: float
     timestamp: int
     model_hash: str
 
@@ -165,6 +175,10 @@ def _predict_asset(
     confidence = max(p_high, p_low)
     regime = "HIGH_VOL" if p_high > p_low else "LOW_VOL"
 
+    # Extract current realised 24h volatility
+    rv_col = "realised_vol_24h"
+    realised_vol = float(df[rv_col].iloc[-1]) if rv_col in df.columns else 0.0
+
     return RegimePrediction(
         asset=short,
         p_high_vol=round(p_high, 6),
@@ -172,6 +186,7 @@ def _predict_asset(
         entropy=round(entropy, 6),
         regime=regime,
         confidence=round(confidence, 6),
+        realised_vol_24h=round(realised_vol, 6),
         timestamp=int(time.time()),
         model_hash=_model_hashes.get(short, ""),
     )

@@ -1,17 +1,17 @@
 """
-Multi-Asset Oracle Bridge — Push ML regime updates on-chain.
+Multi-Asset Oracle Bridge — Push ML regime updates on-chain + manage rounds.
 
-Reads regime probabilities for ETH, BTC, and SOL from the inference API
-(/predict/all) and pushes each to its own RegimeOracle contract address.
+Reads regime probabilities + realised volatility from the inference API
+and pushes to RegimeOracle contracts.  Also opens new market rounds hourly
+and resolves expired ones via MultiverseMarket.
 
-Environment variables (per-asset oracle addresses):
-    ORACLE_ADDRESS_ETH   — RegimeOracle address for ETH
-    ORACLE_ADDRESS_BTC   — RegimeOracle address for BTC
-    ORACLE_ADDRESS_SOL   — RegimeOracle address for SOL
+Environment variables (per-asset):
+    ORACLE_ADDRESS_ETH / BTC / SOL  — RegimeOracle addresses
+    MARKET_ADDRESS_ETH / BTC / SOL  — MultiverseMarket addresses
 
 Usage:
     python push_update.py                         # one-shot, all assets
-    python push_update.py --loop --interval 14400 # every 4h
+    python push_update.py --loop --interval 3600  # every hour (open rounds)
     python push_update.py --asset eth             # single asset
 """
 
@@ -44,15 +44,26 @@ ORACLE_ADDRESSES: dict[str, str] = {
     "sol": os.getenv("ORACLE_ADDRESS_SOL", ""),
 }
 
+# Per-asset market contract addresses
+MARKET_ADDRESSES: dict[str, str] = {
+    "eth": os.getenv("MARKET_ADDRESS_ETH", ""),
+    "btc": os.getenv("MARKET_ADDRESS_BTC", ""),
+    "sol": os.getenv("MARKET_ADDRESS_SOL", ""),
+}
+
 VALID_ASSETS = ["eth", "btc", "sol"]
 
-# Minimal ABI for RegimeOracle.pushUpdate and postCommit
+# ---------------------------------------------------------------------------
+# ABIs (minimal)
+# ---------------------------------------------------------------------------
+
 ORACLE_ABI = [
     {
         "inputs": [
             {"name": "_pHigh", "type": "uint256"},
             {"name": "_pLow", "type": "uint256"},
             {"name": "_entropy", "type": "uint256"},
+            {"name": "_realisedVol", "type": "uint256"},
             {"name": "_modelHash", "type": "bytes32"},
         ],
         "name": "pushUpdate",
@@ -74,6 +85,7 @@ ORACLE_ABI = [
             {"name": "pHighVol", "type": "uint256"},
             {"name": "pLowVol", "type": "uint256"},
             {"name": "entropy", "type": "uint256"},
+            {"name": "realisedVol", "type": "uint256"},
             {"name": "timestamp", "type": "uint256"},
             {"name": "modelHash", "type": "bytes32"},
         ],
@@ -89,14 +101,57 @@ ORACLE_ABI = [
     },
 ]
 
+MARKET_ABI = [
+    {
+        "inputs": [],
+        "name": "openNewRound",
+        "outputs": [{"name": "roundId", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function",
+    },
+    {
+        "inputs": [{"name": "roundId", "type": "uint256"}],
+        "name": "resolveRound",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function",
+    },
+    {
+        "inputs": [],
+        "name": "currentRoundId",
+        "outputs": [{"name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function",
+    },
+    {
+        "inputs": [{"name": "", "type": "uint256"}],
+        "name": "rounds",
+        "outputs": [
+            {"name": "snapshotVol", "type": "uint256"},
+            {"name": "tradingEnd", "type": "uint256"},
+            {"name": "resolutionTime", "type": "uint256"},
+            {"name": "totalCollateral", "type": "uint256"},
+            {"name": "totalHighTokens", "type": "uint256"},
+            {"name": "totalLowTokens", "type": "uint256"},
+            {"name": "qHigh", "type": "int256"},
+            {"name": "qLow", "type": "int256"},
+            {"name": "resolved", "type": "bool"},
+            {"name": "highVolWon", "type": "bool"},
+            {"name": "resolvedVol", "type": "uint256"},
+        ],
+        "stateMutability": "view",
+        "type": "function",
+    },
+]
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def to_uint256(prob: float) -> int:
-    """Convert a probability [0, 1] to uint256 scaled by 1e18."""
-    return int(prob * 1e18)
+def to_uint256(value: float) -> int:
+    """Convert a float [0, 1] or small decimal to uint256 scaled by 1e18."""
+    return int(value * 1e18)
 
 
 def fetch_all_predictions() -> list[dict]:
@@ -131,17 +186,18 @@ def compute_model_hash(asset: str = "eth") -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# Push update on-chain
+# Push oracle update on-chain
 # ---------------------------------------------------------------------------
 
 def push_update(w3: Web3, contract, account, prediction: dict, model_hash: bytes) -> str:
-    """Build and send the pushUpdate transaction."""
+    """Build and send the pushUpdate transaction (now includes realisedVol)."""
     p_high = to_uint256(prediction["p_high_vol"])
     p_low = to_uint256(prediction["p_low_vol"])
     entropy = to_uint256(prediction["entropy"])
+    realised_vol = to_uint256(prediction.get("realised_vol_24h", 0.0))
 
     tx = contract.functions.pushUpdate(
-        p_high, p_low, entropy, model_hash
+        p_high, p_low, entropy, realised_vol, model_hash
     ).build_transaction({
         "from": account.address,
         "nonce": w3.eth.get_transaction_count(account.address),
@@ -154,6 +210,65 @@ def push_update(w3: Web3, contract, account, prediction: dict, model_hash: bytes
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
 
     return receipt["transactionHash"].hex()
+
+
+# ---------------------------------------------------------------------------
+# Round management
+# ---------------------------------------------------------------------------
+
+def open_new_round(w3: Web3, market_contract, account) -> str | None:
+    """Open a new prediction round on MultiverseMarket."""
+    try:
+        tx = market_contract.functions.openNewRound().build_transaction({
+            "from": account.address,
+            "nonce": w3.eth.get_transaction_count(account.address),
+            "gas": 300_000,
+            "gasPrice": w3.eth.gas_price,
+        })
+        signed = account.sign_transaction(tx)
+        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        return receipt["transactionHash"].hex()
+    except Exception as e:
+        print(f"    Failed to open round: {e}")
+        return None
+
+
+def resolve_expired_rounds(w3: Web3, market_contract, account) -> list[int]:
+    """Try to resolve any rounds whose resolutionTime has passed."""
+    resolved_ids = []
+    try:
+        current_id = market_contract.functions.currentRoundId().call()
+    except Exception:
+        return resolved_ids
+
+    now = int(time.time())
+
+    for rid in range(1, current_id + 1):
+        try:
+            round_data = market_contract.functions.rounds(rid).call()
+            resolution_time = round_data[2]  # resolutionTime
+            already_resolved = round_data[8]  # resolved
+
+            if already_resolved or now < resolution_time:
+                continue
+
+            tx = market_contract.functions.resolveRound(rid).build_transaction({
+                "from": account.address,
+                "nonce": w3.eth.get_transaction_count(account.address),
+                "gas": 200_000,
+                "gasPrice": w3.eth.gas_price,
+            })
+            signed = account.sign_transaction(tx)
+            tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+            w3.eth.wait_for_transaction_receipt(tx_hash)
+            resolved_ids.append(rid)
+            print(f"    Resolved round {rid}")
+
+        except Exception as e:
+            print(f"    Failed to resolve round {rid}: {e}")
+
+    return resolved_ids
 
 
 # ---------------------------------------------------------------------------
@@ -190,27 +305,72 @@ def post_commit(w3: Web3, contract, account, prediction: dict, nonce: int) -> st
 # ---------------------------------------------------------------------------
 
 def push_asset(w3: Web3, account, prediction: dict) -> None:
-    """Push a single asset's prediction on-chain."""
+    """Push a single asset's prediction on-chain + manage rounds."""
     asset = prediction["asset"]
     oracle_addr = ORACLE_ADDRESSES.get(asset, "")
+    market_addr = MARKET_ADDRESSES.get(asset, "")
 
     if not oracle_addr:
         print(f"  [{asset.upper()}] No oracle address configured — skipping on-chain push.")
-        print(f"    P(HIGH_VOL) = {prediction['p_high_vol']:.4f}")
-        print(f"    Regime      = {prediction['regime']}")
+        print(f"    P(HIGH_VOL)     = {prediction['p_high_vol']:.4f}")
+        print(f"    Realised Vol 24h = {prediction.get('realised_vol_24h', 0):.6f}")
+        print(f"    Regime          = {prediction['regime']}")
         return
 
-    contract = w3.eth.contract(
+    # 1. Push oracle update (probs + realised vol)
+    oracle_contract = w3.eth.contract(
         address=Web3.to_checksum_address(oracle_addr),
         abi=ORACLE_ABI,
     )
 
     model_hash = compute_model_hash(asset)
-    tx_hash = push_update(w3, contract, account, prediction, model_hash)
+    tx_hash = push_update(w3, oracle_contract, account, prediction, model_hash)
 
-    print(f"  [{asset.upper()}] TX: {tx_hash}")
-    print(f"    P(HIGH_VOL) = {prediction['p_high_vol']:.4f}")
-    print(f"    Regime      = {prediction['regime']}")
+    print(f"  [{asset.upper()}] Oracle TX: {tx_hash}")
+    print(f"    P(HIGH_VOL)      = {prediction['p_high_vol']:.4f}")
+    print(f"    Realised Vol 24h = {prediction.get('realised_vol_24h', 0):.6f}")
+    print(f"    Regime           = {prediction['regime']}")
+
+    # 2. Market round management (if market address configured)
+    if not market_addr:
+        print(f"  [{asset.upper()}] No market address — skipping round management.")
+        return
+
+    market_contract = w3.eth.contract(
+        address=Web3.to_checksum_address(market_addr),
+        abi=MARKET_ABI,
+    )
+
+    # 2a. Resolve any expired rounds
+    resolved = resolve_expired_rounds(w3, market_contract, account)
+    if resolved:
+        print(f"  [{asset.upper()}] Resolved rounds: {resolved}")
+
+    # 2b. Auto-cycle: if the current round is resolved, start a new one
+    needs_new_round = False
+    try:
+        current_id = market_contract.functions.currentRoundId().call()
+        if current_id == 0:
+            needs_new_round = True  # no rounds yet
+        else:
+            round_data = market_contract.functions.rounds(current_id).call()
+            if round_data[8]:  # resolved == True
+                needs_new_round = True
+                print(f"  [{asset.upper()}] Round {current_id} resolved — auto-cycling to next round")
+    except Exception as e:
+        print(f"  [{asset.upper()}] Failed to check round state: {e}")
+
+    if needs_new_round:
+        tx_hash = open_new_round(w3, market_contract, account)
+        if tx_hash:
+            new_id = market_contract.functions.currentRoundId().call()
+            print(f"  [{asset.upper()}] Opened round {new_id} — TX: {tx_hash}")
+    else:
+        try:
+            cid = market_contract.functions.currentRoundId().call()
+            print(f"  [{asset.upper()}] Round {cid} still active — no new round needed")
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +378,7 @@ def push_asset(w3: Web3, account, prediction: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def run_once(asset_filter: str | None = None):
-    """Execute a single predict → push cycle for all (or one) asset(s)."""
+    """Execute a single predict → push → round-manage cycle."""
     print("=" * 60)
     print(f"Oracle Push Update — {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
@@ -245,7 +405,7 @@ def run_once(asset_filter: str | None = None):
         print("\nFetching predictions for all assets …")
         predictions = fetch_all_predictions()
 
-    # 3. Push each
+    # 3. Push each (oracle update + round management)
     print("\nPushing updates on-chain …")
     for pred in predictions:
         push_asset(w3, account, pred)
@@ -254,9 +414,9 @@ def run_once(asset_filter: str | None = None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Push regime updates to oracle contracts")
+    parser = argparse.ArgumentParser(description="Push regime updates to oracle contracts + manage market rounds")
     parser.add_argument("--loop", action="store_true", help="Run continuously")
-    parser.add_argument("--interval", type=int, default=14400, help="Seconds between updates (default: 4h)")
+    parser.add_argument("--interval", type=int, default=3600, help="Seconds between updates (default: 1h)")
     parser.add_argument("--asset", type=str, default=None, help="Single asset (eth/btc/sol)")
     args = parser.parse_args()
 

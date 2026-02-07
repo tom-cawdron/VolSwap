@@ -1,5 +1,5 @@
 /**
- * API client for the Finance Multiverse inference service.
+ * API client for the VolSwap inference service.
  *
  * Fetches regime predictions from the FastAPI backend and exposes
  * React hooks for live polling.  Falls back to demo data when the
@@ -28,6 +28,7 @@ const DEMO_PREDICTIONS: Record<AssetKey, RegimePrediction> = {
     entropy: 0.46,
     regime: "HIGH_VOL",
     confidence: 0.827,
+    realised_vol_24h: 0.025,
     timestamp: Math.floor(Date.now() / 1000),
     model_hash: "demo_eth_000000000000",
   },
@@ -38,6 +39,7 @@ const DEMO_PREDICTIONS: Record<AssetKey, RegimePrediction> = {
     entropy: 0.69,
     regime: "LOW_VOL",
     confidence: 0.555,
+    realised_vol_24h: 0.018,
     timestamp: Math.floor(Date.now() / 1000),
     model_hash: "demo_btc_000000000000",
   },
@@ -48,6 +50,7 @@ const DEMO_PREDICTIONS: Record<AssetKey, RegimePrediction> = {
     entropy: 0.68,
     regime: "LOW_VOL",
     confidence: 0.547,
+    realised_vol_24h: 0.035,
     timestamp: Math.floor(Date.now() / 1000),
     model_hash: "demo_sol_000000000000",
   },

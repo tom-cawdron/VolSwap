@@ -1,5 +1,5 @@
 /**
- * Shared types for Finance Multiverse frontend.
+ * Shared types for VolSwap frontend.
  */
 
 // ─── Asset identifiers ──────────────────────────────────────────────
@@ -57,6 +57,7 @@ export interface RegimePrediction {
   entropy: number;
   regime: "HIGH_VOL" | "LOW_VOL";
   confidence: number;
+  realised_vol_24h: number;
   timestamp: number;
   model_hash: string;
 }
@@ -64,4 +65,18 @@ export interface RegimePrediction {
 export interface AllPredictionsResponse {
   predictions: RegimePrediction[];
   timestamp: number;
+}
+
+// ─── Market round (matches MultiverseMarket.Round struct) ────────────
+
+export interface MarketRound {
+  roundId: number;
+  snapshotVol: bigint;
+  tradingEnd: bigint;
+  resolutionTime: bigint;
+  totalCollateral: bigint;
+  totalHighTokens: bigint;
+  totalLowTokens: bigint;
+  resolved: boolean;
+  highVolWon: boolean;
 }

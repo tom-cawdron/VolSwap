@@ -35,6 +35,10 @@ function getRegimeBg(regime: string): string {
   return regime === "HIGH_VOL" ? "bg-red-500/10" : "bg-blue-500/10";
 }
 
+function getRegimeLabel(regime: string): string {
+  return regime === "HIGH_VOL" ? "CHAOTIC" : "CALM";
+}
+
 const GLOW_MAP: Record<AssetKey, string> = {
   eth: "glow-indigo",
   btc: "glow-amber",
@@ -58,7 +62,7 @@ function CompactGauge({ asset, data }: { asset: AssetKey; data: RegimePrediction
           <span className="text-xs text-gray-500">{meta.symbol}</span>
         </div>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getRegimeBg(data.regime)} ${getRegimeColor(data.regime)}`}>
-          {data.regime.replace("_", " ")}
+          {getRegimeLabel(data.regime)}
         </span>
       </div>
 
@@ -76,24 +80,30 @@ function CompactGauge({ asset, data }: { asset: AssetKey; data: RegimePrediction
           </defs>
           <line x1="100" y1="100" x2={100 + 60 * Math.cos(Math.PI - (angle * Math.PI) / 180)} y2={100 - 60 * Math.sin(Math.PI - (angle * Math.PI) / 180)} stroke="white" strokeWidth="2" strokeLinecap="round" />
           <circle cx="100" cy="100" r="3.5" fill="white" />
-          <text x="20" y="118" fill="#60A5FA" fontSize="9" fontWeight="600">LOW</text>
-          <text x="158" y="118" fill="#F87171" fontSize="9" fontWeight="600">HIGH</text>
+          <text x="20" y="118" fill="#60A5FA" fontSize="9" fontWeight="600">CALM</text>
+          <text x="149" y="118" fill="#F87171" fontSize="9" fontWeight="600">CHAOS</text>
         </svg>
       </div>
 
-      {/* Probability + confidence */}
+      {/* Probability + confidence + vol */}
       <div className="flex items-center justify-between">
         <div>
           <p className="text-2xl font-mono font-semibold text-white">
             {(data.p_high_vol * 100).toFixed(1)}%
           </p>
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider">P(High Vol)</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Chance of Chaos</p>
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-mono font-semibold text-gray-300">
+            {(data.realised_vol_24h * 100).toFixed(2)}%
+          </p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider">24h Vol</p>
         </div>
         <div className="text-right">
           <p className={`text-sm font-medium ${getEntropyColor(data.entropy)}`}>
             {(data.confidence * 100).toFixed(0)}%
           </p>
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Confidence</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Certainty</p>
         </div>
       </div>
     </div>
@@ -157,39 +167,61 @@ export default function RegimeGauge({
           </defs>
           <line x1="100" y1="100" x2={100 + 65 * Math.cos(Math.PI - (angle * Math.PI) / 180)} y2={100 - 65 * Math.sin(Math.PI - (angle * Math.PI) / 180)} stroke="white" strokeWidth="2.5" strokeLinecap="round" />
           <circle cx="100" cy="100" r="4" fill="white" />
-          <text x="18" y="118" fill="#60A5FA" fontSize="10" fontWeight="600">LOW</text>
-          <text x="156" y="118" fill="#F87171" fontSize="10" fontWeight="600">HIGH</text>
+          <text x="18" y="118" fill="#60A5FA" fontSize="10" fontWeight="600">CALM</text>
+          <text x="147" y="118" fill="#F87171" fontSize="10" fontWeight="600">CHAOS</text>
         </svg>
       </div>
 
       {/* Probabilities */}
       <div className="grid grid-cols-2 gap-4 mb-5">
         <div className="rounded-xl bg-blue-500/5 border border-blue-500/10 p-3 text-center">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">P(Low Vol)</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Chance of Calm</p>
           <p className="text-2xl font-mono font-semibold text-blue-400">
             {(data.p_low_vol * 100).toFixed(1)}%
           </p>
         </div>
         <div className="rounded-xl bg-red-500/5 border border-red-500/10 p-3 text-center">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">P(High Vol)</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Chance of Chaos</p>
           <p className="text-2xl font-mono font-semibold text-red-400">
             {(data.p_high_vol * 100).toFixed(1)}%
           </p>
         </div>
       </div>
 
+      {/* Realised Volatility */}
+      <div className="rounded-xl bg-white/[0.03] border border-white/5 p-4 mb-5">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Current 24h Realised Vol</p>
+          <p className="text-lg font-mono font-semibold text-white">
+            {(data.realised_vol_24h * 100).toFixed(2)}%
+          </p>
+        </div>
+        {/* Vol bar visual */}
+        <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-blue-500 via-yellow-500 to-red-500 transition-all duration-700"
+            style={{ width: `${Math.min(data.realised_vol_24h * 100 * 10, 100)}%` }}
+          />
+        </div>
+        <div className="flex justify-between text-[9px] text-gray-600 mt-1">
+          <span>0%</span>
+          <span>5%</span>
+          <span>10%+</span>
+        </div>
+      </div>
+
       {/* Regime & Entropy */}
       <div className="flex items-center justify-between border-t border-white/5 pt-4">
         <div>
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Current Regime</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">AI Prediction</p>
           <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${getRegimeBg(data.regime)} ${getRegimeColor(data.regime)}`}>
-            {data.regime.replace("_", " ")}
+            → {data.regime === "HIGH_VOL" ? "Expecting Chaos" : "Expecting Calm"}
           </span>
         </div>
         <div className="text-right">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Entropy</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Model Certainty</p>
           <p className={`text-sm font-medium ${getEntropyColor(data.entropy)}`}>
-            {data.entropy.toFixed(3)} — {getEntropyLabel(data.entropy)}
+            {(data.confidence * 100).toFixed(0)}% — {getEntropyLabel(data.entropy)}
           </p>
         </div>
       </div>

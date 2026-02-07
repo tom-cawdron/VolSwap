@@ -131,17 +131,23 @@ where $H = -\sum p_i \log p_i$ is Shannon entropy and $H_{\max} = \ln 2$.
 | Moderate | 0.3–0.6 | ~2% |
 | Low | > 0.6 | ~5% |
 
+**Round lifecycle:**
+- New rounds open every hour with a 1-hour trading window
+- `tradingDuration = 1 hour`, `resolutionDelay = 25 hours` (1h trading + 24h waiting)
+- Multiple rounds overlap: while round N awaits resolution, rounds N+1, N+2, … can be open
+
 **Trading flow:**
-1. User calls `buyOutcome(isHighVol, amount)`
+1. User calls `buyOutcome(isHighVol, amount)` during the 1-hour trading window
 2. Contract computes LMSR cost difference
-3. Applies dynamic fee
+3. Applies flat 0.5 fee
 4. Mints tokens to buyer
 5. Excess ETH refunded
 
 **Resolution:**
-- Anyone calls `resolveMarket()` after epoch
-- If `P(HIGH_VOL) > 0.60` → HIGH_VOL wins
-- Winners call `claimPayout()`
+- Anyone calls `resolveRound(roundId)` after resolutionTime (25h after round open)
+- Compares current 24h realised vol (from oracle) against the snapshot vol from round open
+- HIGH wins if realised vol increased, LOW wins if it decreased
+- Winners call `claimPayout(roundId)`
 
 ### HedgeVault.sol
 

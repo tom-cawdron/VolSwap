@@ -13,6 +13,7 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "disableSolutionSearching": true,
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./*"]

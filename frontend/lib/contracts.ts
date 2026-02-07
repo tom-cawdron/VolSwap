@@ -1,5 +1,5 @@
 /**
- * Contract ABIs and addresses for Finance Multiverse.
+ * Contract ABIs and addresses for VolSwap.
  *
  * Replace the placeholder addresses with actual deployed addresses
  * after deploying to testnet (Base Sepolia / Arbitrum Sepolia).
@@ -60,6 +60,7 @@ export const REGIME_ORACLE_ABI = [
       { name: "pHighVol", type: "uint256" },
       { name: "pLowVol", type: "uint256" },
       { name: "entropy", type: "uint256" },
+      { name: "realisedVol", type: "uint256" },
       { name: "timestamp", type: "uint256" },
       { name: "modelHash", type: "bytes32" },
     ],
@@ -79,6 +80,13 @@ export const REGIME_ORACLE_ABI = [
   {
     inputs: [],
     name: "getEntropy",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "getRealisedVol",
     outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
     type: "function",
@@ -104,6 +112,7 @@ export const REGIME_ORACLE_ABI = [
       { indexed: false, name: "pHighVol", type: "uint256" },
       { indexed: false, name: "pLowVol", type: "uint256" },
       { indexed: false, name: "entropy", type: "uint256" },
+      { indexed: false, name: "realisedVol", type: "uint256" },
       { indexed: false, name: "timestamp", type: "uint256" },
     ],
     name: "RegimeUpdated",
@@ -124,13 +133,45 @@ export const MULTIVERSE_MARKET_ABI = [
   },
   {
     inputs: [],
+    name: "currentRoundId",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "roundId", type: "uint256" }],
+    name: "getRound",
+    outputs: [
+      {
+        components: [
+          { name: "snapshotVol", type: "uint256" },
+          { name: "tradingEnd", type: "uint256" },
+          { name: "resolutionTime", type: "uint256" },
+          { name: "totalCollateral", type: "uint256" },
+          { name: "totalHighTokens", type: "uint256" },
+          { name: "totalLowTokens", type: "uint256" },
+          { name: "qHigh", type: "int256" },
+          { name: "qLow", type: "int256" },
+          { name: "resolved", type: "bool" },
+          { name: "highVolWon", type: "bool" },
+          { name: "resolvedVol", type: "uint256" },
+        ],
+        name: "",
+        type: "tuple",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "roundId", type: "uint256" }],
     name: "priceHighVol",
     outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
     type: "function",
   },
   {
-    inputs: [],
+    inputs: [{ name: "roundId", type: "uint256" }],
     name: "priceLowVol",
     outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
@@ -145,6 +186,7 @@ export const MULTIVERSE_MARKET_ABI = [
   },
   {
     inputs: [
+      { name: "roundId", type: "uint256" },
       { name: "isHighVol", type: "bool" },
       { name: "amount", type: "uint256" },
     ],
@@ -154,50 +196,54 @@ export const MULTIVERSE_MARKET_ABI = [
     type: "function",
   },
   {
-    inputs: [],
-    name: "resolveMarket",
+    inputs: [{ name: "roundId", type: "uint256" }],
+    name: "resolveRound",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
   },
   {
     inputs: [],
+    name: "startNewRound",
+    outputs: [{ name: "newRoundId", type: "uint256" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "roundId", type: "uint256" }],
     name: "claimPayout",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
   },
   {
-    inputs: [{ name: "", type: "address" }],
-    name: "highVolBalance",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "", type: "address" }],
-    name: "lowVolBalance",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "resolved",
-    outputs: [{ name: "", type: "bool" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "totalCollateral",
-    outputs: [{ name: "", type: "uint256" }],
+    inputs: [
+      { name: "roundId", type: "uint256" },
+      { name: "user", type: "address" },
+    ],
+    name: "getUserPosition",
+    outputs: [
+      { name: "high", type: "uint256" },
+      { name: "low", type: "uint256" },
+    ],
     stateMutability: "view",
     type: "function",
   },
   {
     anonymous: false,
     inputs: [
+      { indexed: true, name: "roundId", type: "uint256" },
+      { indexed: false, name: "snapshotVol", type: "uint256" },
+      { indexed: false, name: "tradingEnd", type: "uint256" },
+      { indexed: false, name: "resolutionTime", type: "uint256" },
+    ],
+    name: "RoundOpened",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: "roundId", type: "uint256" },
       { indexed: true, name: "buyer", type: "address" },
       { indexed: false, name: "isHighVol", type: "bool" },
       { indexed: false, name: "amount", type: "uint256" },
@@ -210,10 +256,22 @@ export const MULTIVERSE_MARKET_ABI = [
   {
     anonymous: false,
     inputs: [
+      { indexed: true, name: "roundId", type: "uint256" },
       { indexed: false, name: "highVolWon", type: "bool" },
-      { indexed: false, name: "timestamp", type: "uint256" },
+      { indexed: false, name: "snapshotVol", type: "uint256" },
+      { indexed: false, name: "resolvedVol", type: "uint256" },
     ],
-    name: "MarketResolved",
+    name: "RoundResolved",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: "roundId", type: "uint256" },
+      { indexed: true, name: "user", type: "address" },
+      { indexed: false, name: "payout", type: "uint256" },
+    ],
+    name: "PayoutClaimed",
     type: "event",
   },
 ] as const;
@@ -241,7 +299,7 @@ export const HEDGE_VAULT_ABI = [
     type: "function",
   },
   {
-    inputs: [],
+    inputs: [{ name: "hedgeIndex", type: "uint256" }],
     name: "claimHedge",
     outputs: [],
     stateMutability: "nonpayable",
@@ -252,9 +310,28 @@ export const HEDGE_VAULT_ABI = [
     name: "getPosition",
     outputs: [
       { name: "ethDeposited", type: "uint256" },
-      { name: "highVolTokens", type: "uint256" },
       { name: "hedgeRatio", type: "uint256" },
       { name: "depositTimestamp", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "user", type: "address" }],
+    name: "getUserHedgeCount",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "user", type: "address" },
+      { name: "index", type: "uint256" },
+    ],
+    name: "getUserHedge",
+    outputs: [
+      { name: "roundId", type: "uint256" },
+      { name: "tokens", type: "uint256" },
     ],
     stateMutability: "view",
     type: "function",
@@ -279,7 +356,7 @@ export const HEDGE_VAULT_ABI = [
       { indexed: true, name: "user", type: "address" },
       { indexed: false, name: "totalAmount", type: "uint256" },
       { indexed: false, name: "hedgeAmount", type: "uint256" },
-      { indexed: false, name: "highVolTokens", type: "uint256" },
+      { indexed: false, name: "roundId", type: "uint256" },
       { indexed: false, name: "hedgeRatio", type: "uint256" },
     ],
     name: "Deposited",
@@ -290,7 +367,6 @@ export const HEDGE_VAULT_ABI = [
     inputs: [
       { indexed: true, name: "user", type: "address" },
       { indexed: false, name: "ethAmount", type: "uint256" },
-      { indexed: false, name: "hedgeTokens", type: "uint256" },
     ],
     name: "Withdrawn",
     type: "event",

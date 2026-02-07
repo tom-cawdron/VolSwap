@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
+import "@rainbow-me/rainbowkit/styles.css";
 import "./globals.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "Finance Multiverse — Regime-Based Hedging",
+  title: "VolSwap — Bet on Chaos",
   description:
-    "Trade volatility regime tokens and hedge against market turbulence with ML-driven predictions.",
+    "Bet on whether crypto markets get more chaotic or calmer. AI-driven volatility prediction markets.",
+  icons: {
+    icon: "/logo.svg",
+  },
 };
 
 export default function RootLayout({
