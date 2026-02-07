@@ -3,23 +3,33 @@
 import React, { useState } from "react";
 import { useAccount, useWriteContract, useReadContract } from "wagmi";
 import { parseEther, formatEther } from "viem";
-import { HEDGE_VAULT_ABI, HEDGE_VAULT_ADDRESS } from "../lib/contracts";
+import { HEDGE_VAULT_ABI, HEDGE_VAULT_ADDRESSES } from "../lib/contracts";
+import type { AssetKey } from "../lib/types";
+import { ASSETS } from "../lib/types";
 
 /**
  * VaultDeposit — Deposit ETH into the HedgeVault with a configurable hedge ratio.
  *
  * Users choose what percentage of their deposit buys HIGH_VOL tokens
  * as regime insurance.  The slider ranges from 0% to 30%.
+ * Now parameterised by asset.
  */
 
-export default function VaultDeposit() {
+interface VaultDepositProps {
+  asset: AssetKey;
+}
+
+export default function VaultDeposit({ asset }: VaultDepositProps) {
+  const meta = ASSETS[asset];
+  const vaultAddress = HEDGE_VAULT_ADDRESSES[asset];
+
   const { address, isConnected } = useAccount();
   const [depositAmount, setDepositAmount] = useState("");
   const [hedgeRatio, setHedgeRatio] = useState(10); // percentage (0-30)
 
   // Read user's existing position
   const { data: position } = useReadContract({
-    address: HEDGE_VAULT_ADDRESS,
+    address: vaultAddress,
     abi: HEDGE_VAULT_ABI,
     functionName: "getPosition",
     args: address ? [address] : undefined,
@@ -38,7 +48,7 @@ export default function VaultDeposit() {
     if (!depositAmount || !isConnected) return;
 
     writeContract({
-      address: HEDGE_VAULT_ADDRESS,
+      address: vaultAddress,
       abi: HEDGE_VAULT_ABI,
       functionName: "deposit",
       args: [BigInt(hedgeRatio * 100)], // convert % to bps
@@ -50,7 +60,7 @@ export default function VaultDeposit() {
     if (!isConnected) return;
 
     writeContract({
-      address: HEDGE_VAULT_ADDRESS,
+      address: vaultAddress,
       abi: HEDGE_VAULT_ABI,
       functionName: "withdrawBase",
     });
@@ -62,9 +72,12 @@ export default function VaultDeposit() {
 
   return (
     <div className="rounded-2xl bg-gray-900 border border-gray-800 p-6">
-      <h2 className="text-xl font-semibold text-white mb-2">Hedge Vault</h2>
+      <div className="flex items-center gap-3 mb-2">
+        <span className={`text-lg font-bold ${meta.color}`}>{meta.shortLabel}</span>
+        <h2 className="text-xl font-semibold text-white">Hedge Vault</h2>
+      </div>
       <p className="text-sm text-gray-400 mb-6">
-        Deposit ETH and hedge against high-volatility regimes automatically.
+        Deposit ETH and hedge against high-volatility regimes on {meta.label}.
       </p>
 
       {/* Existing position */}

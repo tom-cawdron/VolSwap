@@ -3,12 +3,15 @@
 import React, { useState } from "react";
 import { useAccount, useWriteContract, useReadContract } from "wagmi";
 import { parseEther, formatEther } from "viem";
-import { MULTIVERSE_MARKET_ABI, MULTIVERSE_MARKET_ADDRESS } from "../lib/contracts";
+import { MULTIVERSE_MARKET_ABI, MULTIVERSE_MARKET_ADDRESSES } from "../lib/contracts";
+import type { AssetKey } from "../lib/types";
+import { ASSETS } from "../lib/types";
 
 /**
- * TradePanel — Buy / sell HIGH_VOL or LOW_VOL regime tokens.
+ * TradePanel — Buy HIGH_VOL or LOW_VOL regime tokens for a specific asset.
  *
  * Displays:
+ *  - Asset badge
  *  - Current LMSR prices for each outcome
  *  - Dynamic fee (entropy-adaptive)
  *  - Amount input + cost estimate
@@ -17,26 +20,33 @@ import { MULTIVERSE_MARKET_ABI, MULTIVERSE_MARKET_ADDRESS } from "../lib/contrac
 
 type Outcome = "HIGH_VOL" | "LOW_VOL";
 
-export default function TradePanel() {
+interface TradePanelProps {
+  asset: AssetKey;
+}
+
+export default function TradePanel({ asset }: TradePanelProps) {
+  const meta = ASSETS[asset];
+  const marketAddress = MULTIVERSE_MARKET_ADDRESSES[asset];
+
   const { address, isConnected } = useAccount();
   const [outcome, setOutcome] = useState<Outcome>("HIGH_VOL");
   const [amount, setAmount] = useState("");
 
   // Read current prices from contract
   const { data: priceHigh } = useReadContract({
-    address: MULTIVERSE_MARKET_ADDRESS,
+    address: marketAddress,
     abi: MULTIVERSE_MARKET_ABI,
     functionName: "priceHighVol",
   });
 
   const { data: priceLow } = useReadContract({
-    address: MULTIVERSE_MARKET_ADDRESS,
+    address: marketAddress,
     abi: MULTIVERSE_MARKET_ABI,
     functionName: "priceLowVol",
   });
 
   const { data: fee } = useReadContract({
-    address: MULTIVERSE_MARKET_ADDRESS,
+    address: marketAddress,
     abi: MULTIVERSE_MARKET_ABI,
     functionName: "dynamicFee",
   });
@@ -69,7 +79,7 @@ export default function TradePanel() {
     if (!amount || !isConnected) return;
 
     writeContract({
-      address: MULTIVERSE_MARKET_ADDRESS,
+      address: marketAddress,
       abi: MULTIVERSE_MARKET_ABI,
       functionName: "buyOutcome",
       args: [outcome === "HIGH_VOL", parseEther(amount)],
@@ -79,7 +89,10 @@ export default function TradePanel() {
 
   return (
     <div className="rounded-2xl bg-gray-900 border border-gray-800 p-6">
-      <h2 className="text-xl font-semibold text-white mb-6">Trade Regime Tokens</h2>
+      <div className="flex items-center gap-3 mb-6">
+        <span className={`text-lg font-bold ${meta.color}`}>{meta.shortLabel}</span>
+        <h2 className="text-xl font-semibold text-white">Trade Regime Tokens</h2>
+      </div>
 
       {/* Price cards */}
       <div className="grid grid-cols-2 gap-3 mb-6">

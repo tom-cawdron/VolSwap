@@ -3,21 +3,47 @@
  *
  * Replace the placeholder addresses with actual deployed addresses
  * after deploying to testnet (Base Sepolia / Arbitrum Sepolia).
+ *
+ * Each supported asset (ETH, BTC, SOL) has its own oracle, market, and
+ * vault contract instance.
  */
 
-// ─── Addresses (update after deployment) ─────────────────────────────
+import type { AssetKey } from "./types";
 
-export const REGIME_ORACLE_ADDRESS =
-  (process.env.NEXT_PUBLIC_REGIME_ORACLE_ADDRESS as `0x${string}`) ??
-  "0x0000000000000000000000000000000000000000";
+const ZERO: `0x${string}` = "0x0000000000000000000000000000000000000000";
 
-export const MULTIVERSE_MARKET_ADDRESS =
-  (process.env.NEXT_PUBLIC_MULTIVERSE_MARKET_ADDRESS as `0x${string}`) ??
-  "0x0000000000000000000000000000000000000000";
+// ─── Per-asset addresses (update after deployment) ───────────────────
 
-export const HEDGE_VAULT_ADDRESS =
-  (process.env.NEXT_PUBLIC_HEDGE_VAULT_ADDRESS as `0x${string}`) ??
-  "0x0000000000000000000000000000000000000000";
+function envAddr(key: string): `0x${string}` {
+  return (process.env[key] as `0x${string}` | undefined) ?? ZERO;
+}
+
+/** Oracle contract address per asset */
+export const REGIME_ORACLE_ADDRESSES: Record<AssetKey, `0x${string}`> = {
+  eth: envAddr("NEXT_PUBLIC_REGIME_ORACLE_ADDRESS_ETH"),
+  btc: envAddr("NEXT_PUBLIC_REGIME_ORACLE_ADDRESS_BTC"),
+  sol: envAddr("NEXT_PUBLIC_REGIME_ORACLE_ADDRESS_SOL"),
+};
+
+/** Market contract address per asset */
+export const MULTIVERSE_MARKET_ADDRESSES: Record<AssetKey, `0x${string}`> = {
+  eth: envAddr("NEXT_PUBLIC_MULTIVERSE_MARKET_ADDRESS_ETH"),
+  btc: envAddr("NEXT_PUBLIC_MULTIVERSE_MARKET_ADDRESS_BTC"),
+  sol: envAddr("NEXT_PUBLIC_MULTIVERSE_MARKET_ADDRESS_SOL"),
+};
+
+/** Vault contract address per asset */
+export const HEDGE_VAULT_ADDRESSES: Record<AssetKey, `0x${string}`> = {
+  eth: envAddr("NEXT_PUBLIC_HEDGE_VAULT_ADDRESS_ETH"),
+  btc: envAddr("NEXT_PUBLIC_HEDGE_VAULT_ADDRESS_BTC"),
+  sol: envAddr("NEXT_PUBLIC_HEDGE_VAULT_ADDRESS_SOL"),
+};
+
+// ─── Backward-compatible single-address exports ──────────────────────
+
+export const REGIME_ORACLE_ADDRESS = REGIME_ORACLE_ADDRESSES.eth;
+export const MULTIVERSE_MARKET_ADDRESS = MULTIVERSE_MARKET_ADDRESSES.eth;
+export const HEDGE_VAULT_ADDRESS = HEDGE_VAULT_ADDRESSES.eth;
 
 // ─── RegimeOracle ABI ────────────────────────────────────────────────
 
