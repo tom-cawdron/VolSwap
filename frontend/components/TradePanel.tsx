@@ -9,13 +9,6 @@ import { ASSETS } from "../lib/types";
 
 /**
  * TradePanel — Buy HIGH_VOL or LOW_VOL regime tokens for a specific asset.
- *
- * Displays:
- *  - Asset badge
- *  - Current LMSR prices for each outcome
- *  - Dynamic fee (entropy-adaptive)
- *  - Amount input + cost estimate
- *  - Buy buttons
  */
 
 type Outcome = "HIGH_VOL" | "LOW_VOL";
@@ -32,7 +25,6 @@ export default function TradePanel({ asset }: TradePanelProps) {
   const [outcome, setOutcome] = useState<Outcome>("HIGH_VOL");
   const [amount, setAmount] = useState("");
 
-  // Read current prices from contract
   const { data: priceHigh } = useReadContract({
     address: marketAddress,
     abi: MULTIVERSE_MARKET_ABI,
@@ -63,7 +55,6 @@ export default function TradePanel({ asset }: TradePanelProps) {
     ? (Number(fee) / 1e16).toFixed(2) + "%"
     : "—";
 
-  // Estimated cost (simplified: price × amount × (1 + fee))
   const estimatedCost =
     amount && fee
       ? (
@@ -88,50 +79,54 @@ export default function TradePanel({ asset }: TradePanelProps) {
   };
 
   return (
-    <div className="rounded-2xl bg-gray-900 border border-gray-800 p-6">
+    <div className="glass-card rounded-2xl p-6">
+      {/* Header */}
       <div className="flex items-center gap-3 mb-6">
+        <div className={`w-3 h-3 rounded-full ${meta.color.replace("text-", "bg-")}`} />
         <span className={`text-lg font-bold ${meta.color}`}>{meta.shortLabel}</span>
-        <h2 className="text-xl font-semibold text-white">Trade Regime Tokens</h2>
+        <h2 className="text-lg font-semibold text-white">Trade Regime Tokens</h2>
       </div>
 
       {/* Price cards */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <button
           onClick={() => setOutcome("HIGH_VOL")}
-          className={`rounded-xl p-4 border transition-colors ${
+          className={`rounded-xl p-4 border transition-all ${
             outcome === "HIGH_VOL"
-              ? "border-red-500 bg-red-500/10"
-              : "border-gray-700 bg-gray-800 hover:border-gray-600"
+              ? "border-red-500/50 bg-red-500/10 glow-red"
+              : "border-white/5 bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04]"
           }`}
         >
-          <p className="text-xs text-gray-400 mb-1">HIGH_VOL</p>
-          <p className="text-xl font-mono text-red-400">{formattedPriceHigh}</p>
-          <p className="text-xs text-gray-500 mt-1">LMSR Price</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">High Vol</p>
+          <p className="text-xl font-mono font-semibold text-red-400">{formattedPriceHigh}</p>
+          <p className="text-[10px] text-gray-600 mt-1">LMSR Price</p>
         </button>
 
         <button
           onClick={() => setOutcome("LOW_VOL")}
-          className={`rounded-xl p-4 border transition-colors ${
+          className={`rounded-xl p-4 border transition-all ${
             outcome === "LOW_VOL"
-              ? "border-blue-500 bg-blue-500/10"
-              : "border-gray-700 bg-gray-800 hover:border-gray-600"
+              ? "border-blue-500/50 bg-blue-500/10 glow-indigo"
+              : "border-white/5 bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04]"
           }`}
         >
-          <p className="text-xs text-gray-400 mb-1">LOW_VOL</p>
-          <p className="text-xl font-mono text-blue-400">{formattedPriceLow}</p>
-          <p className="text-xs text-gray-500 mt-1">LMSR Price</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Low Vol</p>
+          <p className="text-xl font-mono font-semibold text-blue-400">{formattedPriceLow}</p>
+          <p className="text-[10px] text-gray-600 mt-1">LMSR Price</p>
         </button>
       </div>
 
-      {/* Dynamic fee display */}
+      {/* Dynamic fee */}
       <div className="flex items-center justify-between text-sm mb-4 px-1">
-        <span className="text-gray-400">Dynamic Fee (entropy-adaptive)</span>
-        <span className="text-yellow-400 font-mono">{formattedFee}</span>
+        <span className="text-gray-500 text-xs">Dynamic Fee (entropy-adaptive)</span>
+        <span className="text-yellow-400 font-mono text-sm">{formattedFee}</span>
       </div>
 
       {/* Amount input */}
       <div className="mb-4">
-        <label className="text-sm text-gray-400 mb-1 block">Amount (tokens)</label>
+        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5 block">
+          Amount (tokens)
+        </label>
         <input
           type="number"
           value={amount}
@@ -139,15 +134,15 @@ export default function TradePanel({ asset }: TradePanelProps) {
           placeholder="0.0"
           min="0"
           step="0.01"
-          className="w-full rounded-xl bg-gray-800 border border-gray-700 px-4 py-3
-                     text-white font-mono text-lg placeholder-gray-600
-                     focus:outline-none focus:border-indigo-500 transition-colors"
+          className="w-full rounded-xl bg-white/[0.03] border border-white/10 px-4 py-3
+                     text-white font-mono text-lg placeholder-gray-700
+                     focus:outline-none focus:border-indigo-500/50 focus:bg-white/[0.05] transition-all"
         />
       </div>
 
       {/* Cost estimate */}
       <div className="flex items-center justify-between text-sm mb-6 px-1">
-        <span className="text-gray-400">Estimated Cost</span>
+        <span className="text-gray-500 text-xs">Estimated Cost</span>
         <span className="text-white font-mono">{estimatedCost} ETH</span>
       </div>
 
@@ -155,11 +150,11 @@ export default function TradePanel({ asset }: TradePanelProps) {
       <button
         onClick={handleBuy}
         disabled={!isConnected || !amount || isPending}
-        className={`w-full rounded-xl py-3 font-semibold transition-colors ${
+        className={`w-full rounded-xl py-3.5 font-semibold transition-all ${
           outcome === "HIGH_VOL"
-            ? "bg-red-600 hover:bg-red-500 text-white"
-            : "bg-blue-600 hover:bg-blue-500 text-white"
-        } disabled:opacity-50 disabled:cursor-not-allowed`}
+            ? "bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20"
+            : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20"
+        } disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none`}
       >
         {isPending
           ? "Confirming …"

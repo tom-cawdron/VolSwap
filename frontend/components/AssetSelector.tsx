@@ -19,7 +19,7 @@ export default function AssetSelector({
   onChange,
 }: AssetSelectorProps) {
   return (
-    <div className="inline-flex rounded-xl bg-gray-800 p-1 gap-1">
+    <div className="inline-flex rounded-xl bg-white/[0.03] border border-white/5 p-1 gap-1">
       {ASSET_KEYS.map((key) => {
         const meta: AssetMeta = ASSETS[key];
         const active = key === selected;
@@ -28,13 +28,16 @@ export default function AssetSelector({
           <button
             key={key}
             onClick={() => onChange(key)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
               active
-                ? `${meta.bgColor} ${meta.color} ${meta.borderColor} border`
-                : "text-gray-400 hover:text-white border border-transparent"
+                ? `${meta.bgColor} ${meta.color} border ${meta.borderColor.replace("border-", "border-")}/40 shadow-sm`
+                : "text-gray-500 hover:text-gray-300 hover:bg-white/[0.03] border border-transparent"
             }`}
           >
-            {meta.shortLabel}
+            <span className="flex items-center gap-2">
+              <span className={`w-1.5 h-1.5 rounded-full ${active ? meta.color.replace("text-", "bg-") : "bg-gray-600"}`} />
+              {meta.shortLabel}
+            </span>
           </button>
         );
       })}
