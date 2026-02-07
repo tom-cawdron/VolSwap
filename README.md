@@ -96,7 +96,7 @@ The AMM trading fee **scales with Shannon entropy** of the model output:
 
 $$H = -\sum_i p_i \log(p_i)$$
 
-$$\text{fee} = 0.5\% + 4.5\% \times \frac{H}{H_{\max}}$$
+$$\text{fee} = 0.5% + 4.5\% \times \frac{H}{H_{\max}}$$
 
 | Model State | Entropy | Fee | Rationale |
 |---|---|---|---|
