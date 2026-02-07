@@ -1,4 +1,4 @@
-﻿# VolSwap — Bet on Chaos
+﻿# VolSwap — Bet on Chaos or Calm
 
 > *Will crypto markets get more chaotic or stay calm? Our AI reads the signals — you bet on what happens next.*
 
