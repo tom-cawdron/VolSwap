@@ -10,9 +10,9 @@ A volatility prediction market powered by XGBoost regime detection, LMSR pricing
 
 | Role | Name | University | Deliverables |
 |------|------|------------|--------------|
-| ML Lead | Tom Cawdron | LSE (Mathematics with Data Science) | Feature engineering, XGBoost training, calibration, inference API |
-| Quant / Econ | Ilyes Kallel | UCL | LMSR maths, dynamic fee derivation, pitch deck economics |
-| Smart Contract Dev | Filippo Piglia | UCL | Solidity contracts, testing, deployment to testnet |
+| Programming Lead | Tom Cawdron | LSE (Mathematics with Data Science) | Feature engineering, XGBoost training, calibration, inference API |
+| Pitch Lead | Ilyes Kallel | UCL | LMSR maths, dynamic fee derivation, pitch creation |
+| Economics/Ideas Lead | Filippo Piglia | UCL | Solidity contracts, testing, deployment to testnet, Frontend design |
 
 ---
 
