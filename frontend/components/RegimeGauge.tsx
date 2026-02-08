@@ -80,8 +80,8 @@ function CompactGauge({ asset, data }: { asset: AssetKey; data: RegimePrediction
           </defs>
           <line x1="100" y1="100" x2={100 + 60 * Math.cos(Math.PI - (angle * Math.PI) / 180)} y2={100 - 60 * Math.sin(Math.PI - (angle * Math.PI) / 180)} stroke="white" strokeWidth="2" strokeLinecap="round" />
           <circle cx="100" cy="100" r="3.5" fill="white" />
-          <text x="20" y="118" fill="#60A5FA" fontSize="9" fontWeight="600">CALM</text>
-          <text x="149" y="118" fill="#F87171" fontSize="9" fontWeight="600">CHAOS</text>
+          <text x="20" y="118" fill="#60A5FA" fontSize="11" fontWeight="600">CALM</text>
+          <text x="147" y="118" fill="#F87171" fontSize="11" fontWeight="600">CHAOS</text>
         </svg>
       </div>
 
@@ -91,19 +91,19 @@ function CompactGauge({ asset, data }: { asset: AssetKey; data: RegimePrediction
           <p className="text-2xl font-mono font-semibold text-white">
             {(data.p_high_vol * 100).toFixed(1)}%
           </p>
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Chance of Chaos</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider">Chance of Chaos</p>
         </div>
         <div className="text-center">
           <p className="text-sm font-mono font-semibold text-gray-300">
             {(data.realised_vol_24h * 100).toFixed(2)}%
           </p>
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider">24h Vol</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider">24h Vol</p>
         </div>
         <div className="text-right">
           <p className={`text-sm font-medium ${getEntropyColor(data.entropy)}`}>
             {(data.confidence * 100).toFixed(0)}%
           </p>
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Certainty</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider">Certainty</p>
         </div>
       </div>
     </div>
@@ -148,7 +148,7 @@ export default function RegimeGauge({
           <span className={`text-lg font-bold ${meta.color}`}>{meta.shortLabel}</span>
           <h2 className="text-lg font-semibold text-white">Regime Probability</h2>
         </div>
-        <span className="text-[10px] text-gray-500 uppercase tracking-wider">
+        <span className="text-xs text-gray-500 uppercase tracking-wider">
           {new Date(data.timestamp * 1000).toLocaleTimeString()}
         </span>
       </div>
@@ -167,21 +167,21 @@ export default function RegimeGauge({
           </defs>
           <line x1="100" y1="100" x2={100 + 65 * Math.cos(Math.PI - (angle * Math.PI) / 180)} y2={100 - 65 * Math.sin(Math.PI - (angle * Math.PI) / 180)} stroke="white" strokeWidth="2.5" strokeLinecap="round" />
           <circle cx="100" cy="100" r="4" fill="white" />
-          <text x="18" y="118" fill="#60A5FA" fontSize="10" fontWeight="600">CALM</text>
-          <text x="147" y="118" fill="#F87171" fontSize="10" fontWeight="600">CHAOS</text>
+          <text x="18" y="118" fill="#60A5FA" fontSize="12" fontWeight="600">CALM</text>
+          <text x="145" y="118" fill="#F87171" fontSize="12" fontWeight="600">CHAOS</text>
         </svg>
       </div>
 
       {/* Probabilities */}
       <div className="grid grid-cols-2 gap-4 mb-5">
         <div className="rounded-xl bg-blue-500/5 border border-blue-500/10 p-3 text-center">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Chance of Calm</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Chance of Calm</p>
           <p className="text-2xl font-mono font-semibold text-blue-400">
             {(data.p_low_vol * 100).toFixed(1)}%
           </p>
         </div>
         <div className="rounded-xl bg-red-500/5 border border-red-500/10 p-3 text-center">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Chance of Chaos</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Chance of Chaos</p>
           <p className="text-2xl font-mono font-semibold text-red-400">
             {(data.p_high_vol * 100).toFixed(1)}%
           </p>
@@ -191,7 +191,7 @@ export default function RegimeGauge({
       {/* Realised Volatility */}
       <div className="rounded-xl bg-white/[0.03] border border-white/5 p-4 mb-5">
         <div className="flex items-center justify-between mb-2">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Current 24h Realised Vol</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider">Current 24h Realised Vol</p>
           <p className="text-lg font-mono font-semibold text-white">
             {(data.realised_vol_24h * 100).toFixed(2)}%
           </p>
@@ -203,7 +203,7 @@ export default function RegimeGauge({
             style={{ width: `${Math.min(data.realised_vol_24h * 100 * 10, 100)}%` }}
           />
         </div>
-        <div className="flex justify-between text-[9px] text-gray-600 mt-1">
+        <div className="flex justify-between text-[11px] text-gray-600 mt-1">
           <span>0%</span>
           <span>5%</span>
           <span>10%+</span>
@@ -213,13 +213,13 @@ export default function RegimeGauge({
       {/* Regime & Entropy */}
       <div className="flex items-center justify-between border-t border-white/5 pt-4">
         <div>
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">AI Prediction</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">AI Prediction</p>
           <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${getRegimeBg(data.regime)} ${getRegimeColor(data.regime)}`}>
             → {data.regime === "HIGH_VOL" ? "Expecting Chaos" : "Expecting Calm"}
           </span>
         </div>
         <div className="text-right">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Model Certainty</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Model Certainty</p>
           <p className={`text-sm font-medium ${getEntropyColor(data.entropy)}`}>
             {(data.confidence * 100).toFixed(0)}% — {getEntropyLabel(data.entropy)}
           </p>

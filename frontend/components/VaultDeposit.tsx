@@ -97,7 +97,7 @@ export default function VaultDeposit({ asset }: VaultDepositProps) {
         A portion of your deposit buys HIGHER tokens each round — if vol rises, your hedge pays out.
       </p>
       <div className="rounded-lg bg-indigo-500/5 border border-indigo-500/10 px-3 py-2 mb-6">
-        <p className="text-[10px] text-indigo-300">
+        <p className="text-xs text-indigo-300">
           💡 <span className="font-medium">Hedge Ratio</span> = the % of your deposit that buys vol protection each round. 10% is a good starting point.
         </p>
       </div>
@@ -105,7 +105,7 @@ export default function VaultDeposit({ asset }: VaultDepositProps) {
       {/* Existing position */}
       {position && ((position as [bigint, bigint, bigint])[0]) > BigInt(0) && (
         <div className="rounded-xl bg-white/[0.03] border border-white/5 p-4 mb-6">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">Your Position</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Your Position</p>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs text-gray-500">Base ETH</p>
@@ -117,7 +117,7 @@ export default function VaultDeposit({ asset }: VaultDepositProps) {
             </div>
           </div>
           {numHedges > 0 && (
-            <p className="text-[10px] text-gray-500 mt-2">
+            <p className="text-xs text-gray-500 mt-2">
               {numHedges} active hedge position{numHedges > 1 ? "s" : ""} across rounds
             </p>
           )}
@@ -133,7 +133,7 @@ export default function VaultDeposit({ asset }: VaultDepositProps) {
 
       {/* Deposit amount */}
       <div className="mb-4">
-        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5 block">
+        <label className="text-xs text-gray-500 uppercase tracking-wider mb-1.5 block">
           Deposit Amount (ETH)
         </label>
         <input
@@ -152,7 +152,7 @@ export default function VaultDeposit({ asset }: VaultDepositProps) {
       {/* Hedge ratio slider */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
-          <label className="text-[10px] text-gray-500 uppercase tracking-wider">Hedge Ratio</label>
+          <label className="text-xs text-gray-500 uppercase tracking-wider">Hedge Ratio</label>
           <span className="text-sm font-mono font-semibold text-indigo-400">{hedgeRatio}%</span>
         </div>
         <input
@@ -164,7 +164,7 @@ export default function VaultDeposit({ asset }: VaultDepositProps) {
           onChange={(e) => setHedgeRatio(parseInt(e.target.value))}
           className="w-full"
         />
-        <div className="flex justify-between text-[10px] text-gray-600 mt-1">
+        <div className="flex justify-between text-xs text-gray-600 mt-1">
           <span>0% (no hedge)</span>
           <span>30% (max)</span>
         </div>
@@ -173,7 +173,7 @@ export default function VaultDeposit({ asset }: VaultDepositProps) {
       {/* Allocation breakdown */}
       {depositAmount && parseFloat(depositAmount) > 0 && (
         <div className="rounded-xl bg-white/[0.03] border border-white/5 p-4 mb-5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">Allocation</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Allocation</p>
           <div className="space-y-2.5">
             <div className="flex justify-between">
               <span className="text-xs text-gray-400">Kept as ETH (safe portion)</span>
@@ -197,21 +197,21 @@ export default function VaultDeposit({ asset }: VaultDepositProps) {
       {/* Projected payoffs */}
       {depositAmount && parseFloat(depositAmount) > 0 && (
         <div className="rounded-xl bg-white/[0.03] border border-white/5 p-4 mb-5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">Projected Payoffs</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Projected Payoffs</p>
           <div className="grid grid-cols-2 gap-4">
             <div className="text-center">
-              <p className="text-[10px] text-blue-400 font-medium mb-1">If Vol Drops</p>
+              <p className="text-xs text-blue-400 font-medium mb-1">If Vol Drops</p>
               <p className="text-sm font-mono font-semibold text-white">
                 {baseAmountEth.toFixed(4)} ETH
               </p>
-              <p className="text-[10px] text-gray-600 mt-0.5">hedge expires worthless</p>
+              <p className="text-xs text-gray-600 mt-0.5">hedge expires worthless</p>
             </div>
             <div className="text-center">
-              <p className="text-[10px] text-red-400 font-medium mb-1">If Vol Rises</p>
+              <p className="text-xs text-red-400 font-medium mb-1">If Vol Rises</p>
               <p className="text-sm font-mono font-semibold text-green-400">
                 {(baseAmountEth + hedgeAmountEth * 2).toFixed(4)} ETH
               </p>
-              <p className="text-[10px] text-gray-600 mt-0.5">hedge wins ~2×</p>
+              <p className="text-xs text-gray-600 mt-0.5">hedge wins ~2×</p>
             </div>
           </div>
         </div>

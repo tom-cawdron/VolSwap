@@ -33,11 +33,11 @@ export default function Home() {
           <div className="flex items-center gap-4">
             {/* Status pill */}
             {isDemo ? (
-              <span className="text-[10px] uppercase tracking-wider px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <span className="text-xs uppercase tracking-wider px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
                 Demo Mode
               </span>
             ) : (
-              <span className="text-[10px] uppercase tracking-wider px-3 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 flex items-center gap-1.5">
+              <span className="text-xs uppercase tracking-wider px-3 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                 Live
               </span>
@@ -100,10 +100,10 @@ export default function Home() {
             { step: "3", icon: "03", title: "Collect Winnings", desc: "24 hours later, actual vol is compared to the snapshot. Correct callers split the entire pool." },
           ].map((s) => (
             <div key={s.step} className="glass-card rounded-xl p-4 flex items-start gap-3">
-              <span className="text-sm font-mono font-black text-white bg-white/10 w-8 h-8 flex items-center justify-center border border-white/20">{s.icon}</span>
+              <span className="text-base font-mono font-black text-white bg-white/10 w-8 h-8 flex items-center justify-center border border-white/20">{s.icon}</span>
               <div>
                 <p className="text-sm font-semibold text-white mb-0.5">{s.title}</p>
-                <p className="text-xs text-gray-400 leading-relaxed">{s.desc}</p>
+                <p className="text-sm text-gray-400 leading-relaxed">{s.desc}</p>
               </div>
             </div>
           ))}
@@ -112,7 +112,7 @@ export default function Home() {
         {/* ─── Overview: compact gauges for all 3 assets ──────────── */}
         <section className="mb-10">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-[11px] font-semibold text-gray-500 uppercase tracking-widest">
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
               Market Overview
             </h2>
             {lastUpdated && (
@@ -150,7 +150,7 @@ export default function Home() {
               <span className="text-amber-400 text-sm mt-0.5">/!</span>
               <div>
                 <p className="text-xs text-amber-400 font-medium">Inference server offline — showing demo data</p>
-                <p className="text-[10px] text-gray-500 mt-0.5">
+                <p className="text-xs text-gray-500 mt-0.5">
                   Start the server with: uvicorn src.inference:app --port 8000 --app-dir ml
                 </p>
               </div>
@@ -165,14 +165,14 @@ export default function Home() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
             <AssetSelector selected={selectedAsset} onChange={setSelectedAsset} />
-            <span className="text-xs text-gray-500">{meta.label} — {meta.symbol}</span>
+            <span className="text-sm text-gray-500">{meta.label} — {meta.symbol}</span>
           </div>
 
           {/* Tab toggle */}
           <div className="flex items-center gap-1 p-1 rounded-xl bg-white/[0.03] border border-white/5">
             <button
               onClick={() => setActiveTab("trade")}
-              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
                 activeTab === "trade"
                   ? "bg-indigo-600 text-white shadow-sm"
                   : "text-gray-400 hover:text-white"
@@ -182,7 +182,7 @@ export default function Home() {
             </button>
             <button
               onClick={() => setActiveTab("hedge")}
-              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
                 activeTab === "hedge"
                   ? "bg-indigo-600 text-white shadow-sm"
                   : "text-gray-400 hover:text-white"
