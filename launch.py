@@ -18,10 +18,17 @@ ROOT = Path(__file__).resolve().parent
 ML_DIR = ROOT / "ml"
 FRONTEND_DIR = ROOT / "frontend"
 MODELS_DIR = ML_DIR / "models"
-VENV_PYTHON = ROOT / "venv" / "Scripts" / "python.exe"
+# Support both Windows and Unix venv layouts
+VENV_WIN = ROOT / "venv" / "Scripts" / "python.exe"
+VENV_UNIX = ROOT / "venv" / "bin" / "python"
 
 # Use venv python if available, else system python
-PYTHON = str(VENV_PYTHON) if VENV_PYTHON.exists() else sys.executable
+if VENV_WIN.exists():
+    PYTHON = str(VENV_WIN)
+elif VENV_UNIX.exists():
+    PYTHON = str(VENV_UNIX)
+else:
+    PYTHON = sys.executable
 
 
 def run(cmd: list[str], cwd: Path = ROOT, check: bool = True):
@@ -34,13 +41,15 @@ def run(cmd: list[str], cwd: Path = ROOT, check: bool = True):
 
 def install_deps():
     """Install Python + Node dependencies if needed."""
-    # Python deps
-    req = ROOT / "requirements.txt"
+    # Python deps (use inference-only requirements to avoid C++ build deps)
+    req_inference = ROOT / "requirements-inference.txt"
+    req_fallback = ROOT / "requirements.txt"
+    req = req_inference if req_inference.exists() else req_fallback
     if req.exists():
-        print(">> Installing Python dependencies...")
+        print(f">> Installing Python dependencies from {req.name}...")
         run([PYTHON, "-m", "pip", "install", "-q", "-r", str(req)])
     else:
-        print(">> No requirements.txt found, skipping Python deps.")
+        print(">> No requirements file found, skipping Python deps.")
 
     # Node deps
     if (FRONTEND_DIR / "package.json").exists():
@@ -53,17 +62,21 @@ def install_deps():
 
 def train_models():
     """Train HMM + XGBoost for all assets if model files don't exist."""
+    # Only check for XGBoost models + feature columns (required for inference).
+    # HMM .pkl files are intermediate training artifacts and not needed at runtime.
     all_ok = all(
-        (MODELS_DIR / f"hmm_{a}.pkl").exists() and
-        (MODELS_DIR / f"xgb_{a}.joblib").exists()
+        (MODELS_DIR / f"xgb_{a}.joblib").exists() and
+        (MODELS_DIR / f"xgb_{a}_feature_cols.json").exists()
         for a in ("eth", "btc", "sol")
     )
 
     if all_ok:
-        print(">> All models already trained. Use --force-train to retrain.")
+        print(">> All models already present. Use --force-train to retrain.")
         return
 
     print(">> Running full training pipeline (ETH, BTC, SOL) ...")
+    print("   NOTE: Training requires hmmlearn (needs C++ build tools on Windows).")
+    print("         Install with: pip install -r requirements.txt")
     run([PYTHON, "src/train_pipeline.py"], cwd=ML_DIR)
 
     print(">> Models ready.")
@@ -89,16 +102,19 @@ def start_inference_api() -> subprocess.Popen:
 def start_frontend() -> subprocess.Popen:
     """Start the Next.js dev server on port 3000."""
     print("\n>> Starting Frontend on http://localhost:3000 ...")
+    # shell=True needed on Windows where npm is a .cmd script
     proc = subprocess.Popen(
         ["npm", "run", "dev"],
         cwd=str(FRONTEND_DIR),
-        shell=True,
+        shell=(os.name == "nt"),
     )
-    time.sleep(3)
+    # Next.js cold-compiles on first request; give it time to at least not crash
+    time.sleep(8)
     if proc.poll() is not None:
         print("ERROR: Frontend failed to start.")
         sys.exit(1)
     print(">> Frontend running (PID {}).".format(proc.pid))
+    print("   (First page load may take a moment while Next.js compiles.)")
     return proc
 
 

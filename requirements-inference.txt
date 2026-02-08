@@ -1,0 +1,27 @@
+# =============================================================================
+# Finance Multiverse — Inference-Only Dependencies
+# =============================================================================
+# Lightweight install for running the demo (no C++ build tools required).
+# For full training (HMM + XGBoost), use: pip install -r requirements.txt
+# =============================================================================
+
+# ── Core ────────────────────────────────────────────────────────────────────
+numpy>=1.24.0
+pandas>=2.0.0
+
+# ── ML Inference ────────────────────────────────────────────────────────────
+scikit-learn>=1.3.0
+xgboost>=2.0.0
+joblib>=1.3.0
+
+# ── GARCH (pure Python, no C compiler needed) ──────────────────────────────
+arch>=6.2.0
+
+# ── Data Fetching ───────────────────────────────────────────────────────────
+ccxt>=4.1.0
+requests>=2.31.0
+
+# ── Inference API ───────────────────────────────────────────────────────────
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.5.0
