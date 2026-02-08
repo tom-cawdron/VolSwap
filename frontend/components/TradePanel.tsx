@@ -132,16 +132,16 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
   // ─── Unified round values (on-chain OR simulated) ──────────────────
   const onChainRound = roundData as
     | {
-        snapshotVol: bigint;
-        tradingEnd: bigint;
-        resolutionTime: bigint;
-        totalCollateral: bigint;
-        totalHighTokens: bigint;
-        totalLowTokens: bigint;
-        resolved: boolean;
-        highVolWon: boolean;
-        resolvedVol: bigint;
-      }
+      snapshotVol: bigint;
+      tradingEnd: bigint;
+      resolutionTime: bigint;
+      totalCollateral: bigint;
+      totalHighTokens: bigint;
+      totalLowTokens: bigint;
+      resolved: boolean;
+      highVolWon: boolean;
+      resolvedVol: bigint;
+    }
     | undefined;
 
   // Pick active round data source
@@ -194,9 +194,9 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
 
   const rawCost = amount
     ? parseFloat(amount) *
-      (outcome === "CHAOTIC"
-        ? Number(priceHigh ?? 5e17) / 1e18
-        : Number(priceLow ?? 5e17) / 1e18)
+    (outcome === "CHAOTIC"
+      ? Number(priceHigh ?? 5e17) / 1e18
+      : Number(priceLow ?? 5e17) / 1e18)
     : 0;
   const estimatedCost = amount ? (rawCost * (1 + FEE_RATE)).toFixed(6) : "0";
 
@@ -341,17 +341,9 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
         </div>
 
         {totalPool > 0 && (
-          <div className="mt-3 pt-3 border-t border-white/5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">User Pool</span>
-              <span className="text-sm font-mono text-white">{userPool.toFixed(4)} ETH</span>
-            </div>
-            {seedCollateral > 0 && (
-              <div className="flex items-center justify-between mt-1">
-                <span className="text-xs text-gray-600">Liquidity Seed</span>
-                <span className="text-xs font-mono text-gray-600">{seedCollateral.toFixed(4)} ETH</span>
-              </div>
-            )}
+          <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
+            <span className="text-xs text-gray-500">Total Pool</span>
+            <span className="text-sm font-mono text-white">{totalPool.toFixed(4)} ETH</span>
           </div>
         )}
       </div>
@@ -374,11 +366,10 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
       <div className="grid grid-cols-2 gap-4 mb-5">
         <button
           onClick={() => setOutcome("CHAOTIC")}
-          className={`rounded-2xl p-6 border-2 transition-all ${
-            outcome === "CHAOTIC"
-              ? "border-red-500/60 bg-red-500/10 glow-red scale-[1.02]"
-              : "border-white/5 bg-white/[0.02] hover:border-red-500/30 hover:bg-red-500/5"
-          }`}
+          className={`rounded-2xl p-6 border-2 transition-all ${outcome === "CHAOTIC"
+            ? "border-red-500/60 bg-red-500/10 glow-red scale-[1.02]"
+            : "border-white/5 bg-white/[0.02] hover:border-red-500/30 hover:bg-red-500/5"
+            }`}
         >
           <p className="text-sm text-gray-400 uppercase tracking-wider mb-1">Chaotic</p>
           <p className="text-2xl font-mono font-bold text-red-400">{formattedPriceHigh}</p>
@@ -387,11 +378,10 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
 
         <button
           onClick={() => setOutcome("CALM")}
-          className={`rounded-2xl p-6 border-2 transition-all ${
-            outcome === "CALM"
-              ? "border-blue-500/60 bg-blue-500/10 glow-indigo scale-[1.02]"
-              : "border-white/5 bg-white/[0.02] hover:border-blue-500/30 hover:bg-blue-500/5"
-          }`}
+          className={`rounded-2xl p-6 border-2 transition-all ${outcome === "CALM"
+            ? "border-blue-500/60 bg-blue-500/10 glow-indigo scale-[1.02]"
+            : "border-white/5 bg-white/[0.02] hover:border-blue-500/30 hover:bg-blue-500/5"
+            }`}
         >
           <p className="text-sm text-gray-400 uppercase tracking-wider mb-1">Calm</p>
           <p className="text-2xl font-mono font-bold text-blue-400">{formattedPriceLow}</p>
@@ -470,29 +460,28 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
         <button
           onClick={!isContractDeployed ? handleBuy : isConnected ? handleBuy : openConnectModal}
           disabled={!isContractDeployed ? (!amount || !isTradingOpen) : (isConnected && (!amount || isPending || !isTradingOpen))}
-          className={`w-full rounded-xl py-3.5 font-semibold transition-all ${
-            !isContractDeployed
-              ? outcome === "CHAOTIC"
-                ? "bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20"
-                : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20"
-              : !isConnected
-              ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20"
-              : outcome === "CHAOTIC"
+          className={`w-full rounded-xl py-3.5 font-semibold transition-all ${!isContractDeployed
+            ? outcome === "CHAOTIC"
               ? "bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20"
               : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20"
-          } disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none`}
+            : !isConnected
+              ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20"
+              : outcome === "CHAOTIC"
+                ? "bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20"
+                : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20"
+            } disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none`}
         >
           {isPending
             ? "Confirming …"
             : !isContractDeployed
-            ? !isTradingOpen
-              ? "Trading Closed"
-              : `Bet ${outcome}`
-            : !isConnected
-            ? "Connect Wallet"
-            : !isTradingOpen
-            ? "Trading Closed"
-            : `Bet ${outcome}`}
+              ? !isTradingOpen
+                ? "Trading Closed"
+                : `Bet ${outcome}`
+              : !isConnected
+                ? "Connect Wallet"
+                : !isTradingOpen
+                  ? "Trading Closed"
+                  : `Bet ${outcome}`}
         </button>
       )}
 
@@ -515,11 +504,10 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
 
       {/* Demo position (mock wallet) */}
       {!isContractDeployed && (demoPosition.high > 0 || demoPosition.low > 0) && (
-        <div className={`mt-4 rounded-xl border p-4 transition-all duration-500 ${
-          demoBuyFlash
-            ? "bg-green-500/10 border-green-500/30"
-            : "bg-white/[0.03] border-white/5"
-        }`}>
+        <div className={`mt-4 rounded-xl border p-4 transition-all duration-500 ${demoBuyFlash
+          ? "bg-green-500/10 border-green-500/30"
+          : "bg-white/[0.03] border-white/5"
+          }`}>
           <div className="flex items-center gap-2 mb-2">
             <p className="text-xs text-gray-500 uppercase tracking-wider">Your Position (Round #{roundId})</p>
             <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">
@@ -552,30 +540,6 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
           Correct callers split the entire pool proportionally.
         </p>
       </div>
-
-      {/* ─── Resolved Rounds ───────────────────────────────────────── */}
-      {resolvedRounds.length > 0 && (
-        <div className="mt-5">
-          <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Recent Results</p>
-          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-            {resolvedRounds.map((r: SimulatedRound) => (
-              <SimResolvedRow key={r.roundId} round={r} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* On-chain round history */}
-      {isContractDeployed && onChainRoundId > 1 && (
-        <div className="mt-5">
-          <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Past Rounds</p>
-          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-            {Array.from({ length: Math.min(onChainRoundId - 1, 10) }, (_, i) => onChainRoundId - 1 - i).map((rid) => (
-              <OnChainPastRoundRow key={rid} roundId={rid} marketAddress={marketAddress} />
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

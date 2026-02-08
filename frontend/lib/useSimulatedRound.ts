@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { RegimePrediction } from "./types";
+import type { AssetKey, RegimePrediction } from "./types";
 
 // ─── Config ──────────────────────────────────────────────────────────
 
@@ -115,7 +115,11 @@ function seedRounds(): SimulatedRound[] {
   return [resolved1, resolved2, pending1, active];
 }
 
-let _persistedRounds: SimulatedRound[] = seedRounds();
+const _persistedRounds: Record<AssetKey, SimulatedRound[]> = {
+  eth: seedRounds(),
+  btc: seedRounds(),
+  sol: seedRounds(),
+};
 
 // ─── Hook ────────────────────────────────────────────────────────────
 
@@ -137,7 +141,7 @@ export function useSimulatedRound(
   asset: AssetKey,
   prediction: RegimePrediction | null | undefined,
 ): UseSimulatedRoundsResult {
-  const [rounds, setRounds] = useState<SimulatedRound[]>(() => _persistedRounds[asset] ?? []);
+  const [rounds, setRounds] = useState<SimulatedRound[]>(() => _persistedRounds[asset]);
   const predRef = useRef(prediction);
   predRef.current = prediction;
   const assetRef = useRef(asset);
@@ -145,7 +149,7 @@ export function useSimulatedRound(
   // Sync rounds when asset changes
   useEffect(() => {
     assetRef.current = asset;
-    setRounds(_persistedRounds[asset] ?? []);
+    setRounds(_persistedRounds[asset]);
   }, [asset]);
 
   const updateRounds = useCallback((newRounds: SimulatedRound[]) => {
@@ -266,10 +270,12 @@ export function useSimulatedRound(
 
   const activeRound = rounds.find((r) => !r.resolved && now < r.tradingEnd) ?? null;
   const pendingRounds = rounds.filter((r) => !r.resolved && now >= r.tradingEnd);
+  const resolvedRounds = rounds.filter((r) => r.resolved).slice(-10);
 
   return {
     activeRound,
     pendingRounds,
+    resolvedRounds,
     allRounds: rounds,
     roundId: activeRound?.roundId ?? (rounds.length > 0 ? rounds[rounds.length - 1].roundId : 0),
     isSimulated: true,
@@ -279,11 +285,11 @@ export function useSimulatedRound(
       const updated = _persistedRounds[assetRef.current].map((r) =>
         r.roundId === activeRound.roundId
           ? {
-              ...r,
-              totalHighTokens: r.totalHighTokens + highTokens,
-              totalLowTokens: r.totalLowTokens + lowTokens,
-              totalCollateral: r.totalCollateral + collateral,
-            }
+            ...r,
+            totalHighTokens: r.totalHighTokens + highTokens,
+            totalLowTokens: r.totalLowTokens + lowTokens,
+            totalCollateral: r.totalCollateral + collateral,
+          }
           : r,
       );
       updateRounds(updated);

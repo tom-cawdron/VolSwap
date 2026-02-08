@@ -139,11 +139,10 @@ export default function VaultDeposit({ asset }: VaultDepositProps) {
 
       {/* Existing position */}
       {hasPosition && (
-        <div className={`rounded-xl border p-4 mb-6 transition-all duration-500 ${
-          demoFlash
+        <div className={`rounded-xl border p-4 mb-6 transition-all duration-500 ${demoFlash
             ? "bg-green-500/10 border-green-500/30"
             : "bg-white/[0.03] border-white/5"
-        }`}>
+          }`}>
           <div className="flex items-center gap-2 mb-3">
             <p className="text-xs text-gray-500 uppercase tracking-wider">Your Position</p>
             {!isContractDeployed && (
@@ -277,10 +276,10 @@ export default function VaultDeposit({ asset }: VaultDepositProps) {
         {isPending
           ? "Confirming …"
           : !isContractDeployed
-          ? "Deposit & Hedge"
-          : isConnected
-          ? "Deposit & Hedge"
-          : "Connect Wallet"}
+            ? "Deposit & Hedge"
+            : isConnected
+              ? "Deposit & Hedge"
+              : "Connect Wallet"}
       </button>
     </div>
   );

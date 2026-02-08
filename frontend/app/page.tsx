@@ -50,38 +50,38 @@ export default function Home() {
                 demo.eth
               </div>
             ) : (
-            <ConnectButton.Custom>
-              {({ account, chain, openAccountModal, openChainModal, openConnectModal, mounted }) => {
-                const connected = mounted && account && chain;
-                return (
-                  <div {...(!mounted && { "aria-hidden": true, style: { opacity: 0, pointerEvents: "none", userSelect: "none" } })}>
-                    {!connected ? (
-                      <button
-                        onClick={openConnectModal}
-                        className="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-lg shadow-indigo-600/20"
-                      >
-                        Connect Wallet
-                      </button>
-                    ) : chain.id !== baseSepolia.id ? (
-                      <button
-                        onClick={openChainModal}
-                        className="px-4 py-2 rounded-xl text-sm font-medium bg-red-600 hover:bg-red-500 text-white transition-all"
-                      >
-                        Wrong Network
-                      </button>
-                    ) : (
-                      <button
-                        onClick={openAccountModal}
-                        className="px-4 py-2 rounded-xl text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2"
-                      >
-                        <span className="w-2 h-2 rounded-full bg-green-400" />
-                        {account.displayName}
-                      </button>
-                    )}
-                  </div>
-                );
-              }}
-            </ConnectButton.Custom>
+              <ConnectButton.Custom>
+                {({ account, chain, openAccountModal, openChainModal, openConnectModal, mounted }) => {
+                  const connected = mounted && account && chain;
+                  return (
+                    <div {...(!mounted && { "aria-hidden": true, style: { opacity: 0, pointerEvents: "none", userSelect: "none" } })}>
+                      {!connected ? (
+                        <button
+                          onClick={openConnectModal}
+                          className="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-lg shadow-indigo-600/20"
+                        >
+                          Connect Wallet
+                        </button>
+                      ) : chain.id !== baseSepolia.id ? (
+                        <button
+                          onClick={openChainModal}
+                          className="px-4 py-2 rounded-xl text-sm font-medium bg-red-600 hover:bg-red-500 text-white transition-all"
+                        >
+                          Wrong Network
+                        </button>
+                      ) : (
+                        <button
+                          onClick={openAccountModal}
+                          className="px-4 py-2 rounded-xl text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-green-400" />
+                          {account.displayName}
+                        </button>
+                      )}
+                    </div>
+                  );
+                }}
+              </ConnectButton.Custom>
             )}
           </div>
         </div>
@@ -134,12 +134,11 @@ export default function Home() {
               <button
                 key={key}
                 onClick={() => setSelectedAsset(key)}
-                className={`text-left transition-all rounded-2xl ${
-                  key === selectedAsset
+                className={`text-left transition-all rounded-2xl ${key === selectedAsset
                     ? "ring-2 ring-offset-2 ring-offset-[#050510] " +
-                      ASSETS[key].borderColor.replace("border-", "ring-") + "/40"
+                    ASSETS[key].borderColor.replace("border-", "ring-") + "/40"
                     : "hover:ring-1 hover:ring-white/10"
-                }`}
+                  }`}
               >
                 <RegimeGauge
                   asset={key}
@@ -179,21 +178,19 @@ export default function Home() {
           <div className="flex items-center gap-1 p-1 rounded-xl bg-white/[0.03] border border-white/5">
             <button
               onClick={() => setActiveTab("trade")}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                activeTab === "trade"
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === "trade"
                   ? "bg-indigo-600 text-white shadow-sm"
                   : "text-gray-400 hover:text-white"
-              }`}
+                }`}
             >
               Place a Bet
             </button>
             <button
               onClick={() => setActiveTab("hedge")}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                activeTab === "hedge"
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === "hedge"
                   ? "bg-indigo-600 text-white shadow-sm"
                   : "text-gray-400 hover:text-white"
-              }`}
+                }`}
             >
               Auto-Hedge
             </button>
