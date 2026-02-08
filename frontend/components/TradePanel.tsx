@@ -129,6 +129,9 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
       totalCollateral: bigint;
       totalHighTokens: bigint;
       totalLowTokens: bigint;
+      seedCollateral: bigint;
+      seedHighTokens: bigint;
+      seedLowTokens: bigint;
       resolved: boolean;
       highVolWon: boolean;
       resolvedVol: bigint;
@@ -154,6 +157,12 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
   const totalPool = isContractDeployed
     ? (onChainRound ? Number(onChainRound.totalCollateral) / 1e18 : 0)
     : (activeRound?.totalCollateral ?? 0);
+
+  const seedCollateral = isContractDeployed
+    ? (onChainRound ? Number(onChainRound.seedCollateral) / 1e18 : 0)
+    : (activeRound?.seedCollateral ?? 0);
+
+  const userPool = totalPool - seedCollateral;
 
   const isResolved = isContractDeployed
     ? (onChainRound?.resolved ?? false)
@@ -302,9 +311,17 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
         </div>
 
         {totalPool > 0 && (
-          <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
-            <span className="text-[10px] text-gray-500">Total Pool</span>
-            <span className="text-sm font-mono text-white">{totalPool.toFixed(4)} ETH</span>
+          <div className="mt-3 pt-3 border-t border-white/5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-gray-500">User Pool</span>
+              <span className="text-sm font-mono text-white">{userPool.toFixed(4)} ETH</span>
+            </div>
+            {seedCollateral > 0 && (
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-[10px] text-gray-600">Liquidity Seed</span>
+                <span className="text-[11px] font-mono text-gray-600">{seedCollateral.toFixed(4)} ETH</span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -462,7 +479,8 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
           Each round snapshots the current 24h realised volatility and opens a 1-hour trading window.
           After trading closes, the round waits 24 hours. At resolution, the new realised vol is compared
           to the snapshot — if things got more chaotic, CHAOTIC wins; if markets calmed down, CALM wins.
-          Correct callers split the entire pool proportionally.
+          Correct callers split the user pool proportionally. A 0.5 ETH liquidity seed is placed on each
+          side at round open to ensure fair LMSR pricing — the seed is excluded from payouts.
         </p>
       </div>
 
@@ -497,7 +515,7 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
 
 function PendingRoundRow({ round: r, now }: { round: SimulatedRound; now: number }) {
   const countdown = Math.max(0, r.resolutionTime - now);
-  const pool = r.totalCollateral;
+  const pool = r.totalCollateral - (r.seedCollateral ?? 0);
 
   return (
     <div className="rounded-lg bg-white/[0.02] border border-white/5 px-3 py-2 flex items-center justify-between text-xs">
@@ -517,6 +535,7 @@ function PendingRoundRow({ round: r, now }: { round: SimulatedRound; now: number
 /* ─── Resolved Round Row (simulated) ──────────────────────────────── */
 
 function SimResolvedRow({ round: r }: { round: SimulatedRound }) {
+  const pool = r.totalCollateral - (r.seedCollateral ?? 0);
   return (
     <div className="rounded-lg bg-white/[0.02] border border-white/5 px-3 py-2 flex items-center justify-between text-xs">
       <div className="flex items-center gap-3">
@@ -529,7 +548,7 @@ function SimResolvedRow({ round: r }: { round: SimulatedRound }) {
         <span>
           {(r.snapshotVol * 100).toFixed(2)}% → {(r.resolvedVol * 100).toFixed(2)}%
         </span>
-        <span className="text-gray-500">{r.totalCollateral.toFixed(3)} ETH</span>
+        <span className="text-gray-500">{pool.toFixed(3)} ETH</span>
       </div>
     </div>
   );
@@ -549,6 +568,7 @@ function OnChainPastRoundRow({ roundId, marketAddress }: { roundId: number; mark
     | {
       snapshotVol: bigint;
       totalCollateral: bigint;
+      seedCollateral: bigint;
       resolved: boolean;
       highVolWon: boolean;
       resolvedVol: bigint;
@@ -559,7 +579,7 @@ function OnChainPastRoundRow({ roundId, marketAddress }: { roundId: number; mark
 
   const snap = Number(r.snapshotVol) / 1e18;
   const resVol = Number(r.resolvedVol) / 1e18;
-  const pool = Number(r.totalCollateral) / 1e18;
+  const pool = (Number(r.totalCollateral) - Number(r.seedCollateral)) / 1e18;
 
   return (
     <div className="rounded-lg bg-white/[0.02] border border-white/5 px-3 py-2 flex items-center justify-between text-xs">

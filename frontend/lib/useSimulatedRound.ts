@@ -15,6 +15,9 @@ const TRADING_DURATION_S = 60 * 60; // 1 hour
  */
 const RESOLUTION_DELAY_S = 25 * 60 * 60; // 25 hours
 
+/** Protocol seed per side in ETH */
+const SEED_AMOUNT = 0.5;
+
 // ─── Types ───────────────────────────────────────────────────────────
 
 export interface SimulatedRound {
@@ -22,13 +25,16 @@ export interface SimulatedRound {
   snapshotVol: number;          // decimal, e.g. 0.025 = 2.5%
   tradingEnd: number;           // unix timestamp (seconds)
   resolutionTime: number;       // unix timestamp (seconds)
-  totalCollateral: number;      // simulated ETH in pool
+  totalCollateral: number;      // total ETH in pool (seed + user)
   totalHighTokens: number;
   totalLowTokens: number;
   resolved: boolean;
   highVolWon: boolean;
   resolvedVol: number;          // vol at resolution
   startedAt: number;            // unix timestamp when round opened
+  seedCollateral: number;       // ETH contributed by protocol seed
+  seedHighTokens: number;       // seed tokens on HIGH side
+  seedLowTokens: number;        // seed tokens on LOW side
 }
 
 export interface UseSimulatedRoundsResult {
@@ -93,18 +99,26 @@ export function useSimulatedRound(
     const pred = predRef.current;
     const snapshotVol = pred?.realised_vol_24h ?? 0;
 
+    // Seed: 0.5 ETH on each side (symmetric → prices stay 50/50)
+    // Approximate LMSR seed cost: b * ln(2) ≈ 0.693 * b for first side,
+    // same for second since symmetric. We simplify to SEED_AMOUNT per side.
+    const seedCost = SEED_AMOUNT * 2; // total ETH locked as seed
+
     return {
       roundId: prevRoundId + 1,
       snapshotVol,
       tradingEnd: now + TRADING_DURATION_S,
       resolutionTime: now + RESOLUTION_DELAY_S,
-      totalCollateral: 0,
-      totalHighTokens: 0,
-      totalLowTokens: 0,
+      totalCollateral: seedCost,
+      totalHighTokens: SEED_AMOUNT,
+      totalLowTokens: SEED_AMOUNT,
       resolved: false,
       highVolWon: false,
       resolvedVol: 0,
       startedAt: now,
+      seedCollateral: seedCost,
+      seedHighTokens: SEED_AMOUNT,
+      seedLowTokens: SEED_AMOUNT,
     };
   }, []);
 

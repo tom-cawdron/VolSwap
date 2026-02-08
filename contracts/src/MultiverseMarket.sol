@@ -11,7 +11,11 @@ import "./RegimeOracle.sol";
  *   1. `openNewRound()` snapshots the current 24h realised volatility.
  *   2. Users bet ETH on whether vol will be HIGHER or LOWER in 24h.
  *   3. After 24h, `resolveRound()` compares the new vol to the snapshot.
- *   4. Winning side splits ALL collateral proportionally.
+ *   4. Winning side splits USER collateral proportionally (seed excluded).
+ *
+ * Each round is seeded with `seedAmount` ETH on each side to provide
+ * baseline LMSR liquidity and prevent early buyers from swinging prices.
+ * Seed collateral is excluded from payouts and recycled to the reserve.
  *
  * Pricing uses LMSR (Logarithmic Market Scoring Rule) per round.
  * Fees are entropy-adaptive (wider when ML model is uncertain).
@@ -23,14 +27,17 @@ contract MultiverseMarket {
         uint256 snapshotVol;       // realised vol at open (1e18)
         uint256 tradingEnd;        // timestamp: no more buys after this
         uint256 resolutionTime;    // timestamp: can resolve after this
-        uint256 totalCollateral;   // total ETH in the round pool
-        uint256 totalHighTokens;   // total HIGH_VOL tokens minted
-        uint256 totalLowTokens;    // total LOW_VOL tokens minted
+        uint256 totalCollateral;   // total ETH in the round pool (seed + user)
+        uint256 totalHighTokens;   // total HIGH_VOL tokens minted (seed + user)
+        uint256 totalLowTokens;    // total LOW_VOL tokens minted (seed + user)
         int256  qHigh;             // LMSR quantity HIGH
         int256  qLow;              // LMSR quantity LOW
         bool    resolved;
         bool    highVolWon;
         uint256 resolvedVol;       // realised vol at resolution (1e18)
+        uint256 seedCollateral;    // ETH contributed by protocol seed
+        uint256 seedHighTokens;    // seed tokens on HIGH side
+        uint256 seedLowTokens;     // seed tokens on LOW side
     }
 
     // ─── State ───────────────────────────────────────────────────────────
@@ -64,9 +71,16 @@ contract MultiverseMarket {
     uint256 public constant MIN_FEE = 5e15;   // 0.005
     uint256 public constant MAX_FEE = 50e15;  // 0.050
 
+    /// @notice Seed amount per side (default 0.5 ETH)
+    uint256 public seedAmount = 0.5 ether;
+
+    /// @notice Reserve balance for seeding rounds
+    uint256 public seedReserve;
+
     // ─── Events ──────────────────────────────────────────────────────────
 
     event RoundOpened(uint256 indexed roundId, uint256 snapshotVol, uint256 tradingEnd, uint256 resolutionTime);
+    event RoundSeeded(uint256 indexed roundId, uint256 seedCollateral, uint256 seedHighTokens, uint256 seedLowTokens);
     event OutcomeBought(uint256 indexed roundId, address indexed buyer, bool isHighVol, uint256 amount, uint256 cost, uint256 fee);
     event RoundResolved(uint256 indexed roundId, bool highVolWon, uint256 snapshotVol, uint256 resolvedVol);
     event PayoutClaimed(uint256 indexed roundId, address indexed user, uint256 payout);
@@ -84,6 +98,7 @@ contract MultiverseMarket {
     error TransferFailed();
     error InvalidRound();
     error CurrentRoundNotResolved();
+    error InsufficientSeedReserve();
 
     // ─── Modifiers ───────────────────────────────────────────────────────
 
@@ -105,6 +120,7 @@ contract MultiverseMarket {
     /**
      * @notice Open a new prediction round.  Snapshots the current realised vol
      *         from the oracle.  Called hourly by the oracle bridge.
+     *         Seeds the round with protocol liquidity on both sides.
      */
     function openNewRound() external onlyOperator returns (uint256 roundId) {
         currentRoundId++;
@@ -123,10 +139,15 @@ contract MultiverseMarket {
             qLow: 0,
             resolved: false,
             highVolWon: false,
-            resolvedVol: 0
+            resolvedVol: 0,
+            seedCollateral: 0,
+            seedHighTokens: 0,
+            seedLowTokens: 0
         });
 
         emit RoundOpened(roundId, snap, block.timestamp + tradingDuration, block.timestamp + resolutionDelay);
+
+        _seedRound(roundId);
     }
 
     /**
@@ -202,8 +223,9 @@ contract MultiverseMarket {
 
     /**
      * @notice Claim proportional payout from a resolved round.
-     *         Winners split the ENTIRE collateral pool proportionally.
-     *         Payout = (userTokens / totalWinningTokens) × totalCollateral
+     *         Winners split only USER-contributed collateral (seed excluded).
+     *         Payout = (userTokens / userWinningTokens) × userCollateral
+     *         Seed collateral is returned to the reserve for reuse.
      * @param roundId The round to claim from
      */
     function claimPayout(uint256 roundId) external {
@@ -212,22 +234,37 @@ contract MultiverseMarket {
 
         uint256 userTokens;
         uint256 totalWinning;
+        uint256 seedWinning;
 
         if (round.highVolWon) {
             userTokens = highVolBalance[roundId][msg.sender];
             totalWinning = round.totalHighTokens;
+            seedWinning = round.seedHighTokens;
             highVolBalance[roundId][msg.sender] = 0;
         } else {
             userTokens = lowVolBalance[roundId][msg.sender];
             totalWinning = round.totalLowTokens;
+            seedWinning = round.seedLowTokens;
             lowVolBalance[roundId][msg.sender] = 0;
         }
 
         if (userTokens == 0) revert InsufficientBalance();
 
-        // Proportional payout: (userTokens / totalWinningTokens) * totalCollateral
-        uint256 payout = (userTokens * round.totalCollateral) / totalWinning;
+        // Exclude seed from both pool and winning tokens
+        uint256 userPool = round.totalCollateral - round.seedCollateral;
+        uint256 userWinning = totalWinning - seedWinning;
+
+        // If no user tokens on the winning side, nothing to pay out
+        if (userWinning == 0) revert InsufficientBalance();
+
+        uint256 payout = (userTokens * userPool) / userWinning;
         if (payout > address(this).balance) payout = address(this).balance;
+
+        // Return seed collateral to reserve (once, on first claim)
+        if (round.seedCollateral > 0) {
+            seedReserve += round.seedCollateral;
+            round.seedCollateral = 0;
+        }
 
         (bool ok, ) = msg.sender.call{value: payout}("");
         if (!ok) revert TransferFailed();
@@ -352,13 +389,18 @@ contract MultiverseMarket {
             qLow: 0,
             resolved: false,
             highVolWon: false,
-            resolvedVol: 0
+            resolvedVol: 0,
+            seedCollateral: 0,
+            seedHighTokens: 0,
+            seedLowTokens: 0
         });
 
         emit RoundOpened(newRoundId, snap, block.timestamp + tradingDuration, block.timestamp + resolutionDelay);
         if (newRoundId > 1) {
             emit NewRoundStarted(newRoundId - 1, newRoundId);
         }
+
+        _seedRound(newRoundId);
     }
 
     // ─── Admin ───────────────────────────────────────────────────────────
@@ -371,8 +413,78 @@ contract MultiverseMarket {
         resolutionDelay = _delay;
     }
 
+    function setSeedAmount(uint256 _seedAmount) external onlyOperator {
+        seedAmount = _seedAmount;
+    }
+
     function transferOperator(address _newOperator) external onlyOperator {
         operator = _newOperator;
+    }
+
+    // ─── Seed Reserve Management ─────────────────────────────────────────
+
+    /// @notice Deposit ETH into the seed reserve (operator only)
+    function depositSeedReserve() external payable onlyOperator {
+        seedReserve += msg.value;
+    }
+
+    /// @notice Withdraw ETH from the seed reserve (operator only)
+    function withdrawSeedReserve(uint256 amount) external onlyOperator {
+        if (amount > seedReserve) revert InsufficientSeedReserve();
+        seedReserve -= amount;
+        (bool ok, ) = msg.sender.call{value: amount}("");
+        if (!ok) revert TransferFailed();
+    }
+
+    // ─── Internal: Seed a round with protocol liquidity ──────────────────
+
+    /**
+     * @dev Seeds a newly opened round with `seedAmount` tokens on each side.
+     *      Uses the LMSR cost function to determine ETH required.
+     *      Both sides get equal seed → initial price stays 0.5 / 0.5.
+     *      Seed ETH comes from `seedReserve`. If reserve is insufficient,
+     *      the round proceeds unseeded (no revert).
+     */
+    function _seedRound(uint256 roundId) internal {
+        if (seedAmount == 0) return;
+
+        Round storage round = rounds[roundId];
+
+        // Cost of buying seedAmount HIGH tokens from q=(0,0)
+        uint256 costBefore = _cost(round.qHigh, round.qLow);
+        int256 seedInt = int256(seedAmount);
+
+        round.qHigh += seedInt;
+        uint256 costAfterHigh = _cost(round.qHigh, round.qLow);
+        uint256 highCost = costAfterHigh > costBefore ? costAfterHigh - costBefore : 0;
+
+        // Cost of buying seedAmount LOW tokens from q=(seedAmount, 0)
+        round.qLow += seedInt;
+        uint256 costAfterBoth = _cost(round.qHigh, round.qLow);
+        uint256 lowCost = costAfterBoth > costAfterHigh ? costAfterBoth - costAfterHigh : 0;
+
+        uint256 totalSeedCost = highCost + lowCost;
+
+        // If insufficient reserve, revert the q changes and skip seeding
+        if (totalSeedCost > seedReserve) {
+            round.qHigh -= seedInt;
+            round.qLow -= seedInt;
+            return;
+        }
+
+        // Deduct from reserve
+        seedReserve -= totalSeedCost;
+
+        // Record seed tokens and collateral
+        round.totalHighTokens += seedAmount;
+        round.totalLowTokens += seedAmount;
+        round.totalCollateral += totalSeedCost;
+
+        round.seedHighTokens = seedAmount;
+        round.seedLowTokens = seedAmount;
+        round.seedCollateral = totalSeedCost;
+
+        emit RoundSeeded(roundId, totalSeedCost, seedAmount, seedAmount);
     }
 
     // ─── Receive ETH ─────────────────────────────────────────────────────
