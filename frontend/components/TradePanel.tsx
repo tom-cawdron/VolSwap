@@ -291,29 +291,29 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
       <div className="rounded-xl bg-white/[0.03] border border-white/5 p-4 mb-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider">
+            <p className="text-xs text-gray-500 uppercase tracking-wider">
               Round #{roundId || "—"}
             </p>
             {!isContractDeployed && roundId > 0 && (
-              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">
+              <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">
                 Simulated
               </span>
             )}
           </div>
           {isResolved ? (
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">
               Resolved — {(isContractDeployed ? onChainRound?.highVolWon : activeRound?.highVolWon) ? "CHAOTIC won" : "CALM won"}
             </span>
           ) : isTradingOpen ? (
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-900/50 text-green-400 animate-pulse">
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-900/50 text-green-400 animate-pulse">
               Trading Open
             </span>
           ) : roundId > 0 ? (
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-yellow-900/40 text-yellow-400">
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-900/40 text-yellow-400">
               Awaiting Resolution
             </span>
           ) : (
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-800 text-gray-400">
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-800 text-gray-400">
               Waiting for next round
             </span>
           )}
@@ -321,19 +321,19 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
 
         <div className="grid grid-cols-3 gap-3 text-center">
           <div>
-            <p className="text-[10px] text-gray-500 mb-1">Snapshot Vol</p>
+            <p className="text-xs text-gray-500 mb-1">Snapshot Vol</p>
             <p className="text-sm font-mono font-semibold text-white">
               {snapshotVol > 0 ? (snapshotVol * 100).toFixed(3) + "%" : "—"}
             </p>
           </div>
           <div>
-            <p className="text-[10px] text-gray-500 mb-1">Trading Ends</p>
+            <p className="text-xs text-gray-500 mb-1">Trading Ends</p>
             <p className={`text-sm font-mono font-semibold ${isTradingOpen ? "text-green-400" : "text-gray-500"}`}>
               {roundId > 0 ? formatCountdown(tradingCountdown) : "—"}
             </p>
           </div>
           <div>
-            <p className="text-[10px] text-gray-500 mb-1">Resolves In</p>
+            <p className="text-xs text-gray-500 mb-1">Resolves In</p>
             <p className="text-sm font-mono font-semibold text-yellow-400">
               {roundId > 0 ? formatCountdown(resolutionCountdown) : "—"}
             </p>
@@ -341,9 +341,17 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
         </div>
 
         {totalPool > 0 && (
-          <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
-            <span className="text-[10px] text-gray-500">Total Pool</span>
-            <span className="text-sm font-mono text-white">{totalPool.toFixed(4)} ETH</span>
+          <div className="mt-3 pt-3 border-t border-white/5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500">User Pool</span>
+              <span className="text-sm font-mono text-white">{userPool.toFixed(4)} ETH</span>
+            </div>
+            {seedCollateral > 0 && (
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-xs text-gray-600">Liquidity Seed</span>
+                <span className="text-xs font-mono text-gray-600">{seedCollateral.toFixed(4)} ETH</span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -351,7 +359,7 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
       {/* ─── Pending Rounds (awaiting resolution) ──────────────────── */}
       {pendingRounds.length > 0 && (
         <div className="rounded-xl bg-yellow-500/[0.03] border border-yellow-500/10 p-4 mb-5">
-          <p className="text-[10px] text-yellow-500 uppercase tracking-wider mb-3 font-semibold">
+          <p className="text-xs text-yellow-500 uppercase tracking-wider mb-3 font-semibold">
             Awaiting Resolution ({pendingRounds.length} round{pendingRounds.length > 1 ? "s" : ""})
           </p>
           <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
@@ -372,7 +380,7 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
               : "border-white/5 bg-white/[0.02] hover:border-red-500/30 hover:bg-red-500/5"
           }`}
         >
-          <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Chaotic</p>
+          <p className="text-sm text-gray-400 uppercase tracking-wider mb-1">Chaotic</p>
           <p className="text-2xl font-mono font-bold text-red-400">{formattedPriceHigh}</p>
           <p className="text-xs text-gray-500 mt-1.5">Markets get wilder — you win</p>
         </button>
@@ -385,7 +393,7 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
               : "border-white/5 bg-white/[0.02] hover:border-blue-500/30 hover:bg-blue-500/5"
           }`}
         >
-          <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Calm</p>
+          <p className="text-sm text-gray-400 uppercase tracking-wider mb-1">Calm</p>
           <p className="text-2xl font-mono font-bold text-blue-400">{formattedPriceLow}</p>
           <p className="text-xs text-gray-500 mt-1.5">Markets settle down — you win</p>
         </button>
@@ -402,7 +410,7 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
 
       {/* Amount input */}
       <div className="mb-4">
-        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5 block">
+        <label className="text-xs text-gray-500 uppercase tracking-wider mb-1.5 block">
           Amount (tokens)
         </label>
         <input
@@ -491,14 +499,14 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
       {/* User position in this round (on-chain) */}
       {(userHigh > 0 || userLow > 0) && (
         <div className="mt-4 rounded-xl bg-white/[0.03] border border-white/5 p-4">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Your Position (Round #{roundId})</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Your Position (Round #{roundId})</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-[10px] text-red-400">CHAOTIC tokens</p>
+              <p className="text-xs text-red-400">CHAOTIC tokens</p>
               <p className="text-sm font-mono text-white">{userHigh.toFixed(4)}</p>
             </div>
             <div>
-              <p className="text-[10px] text-blue-400">CALM tokens</p>
+              <p className="text-xs text-blue-400">CALM tokens</p>
               <p className="text-sm font-mono text-white">{userLow.toFixed(4)}</p>
             </div>
           </div>
@@ -513,30 +521,30 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
             : "bg-white/[0.03] border-white/5"
         }`}>
           <div className="flex items-center gap-2 mb-2">
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Your Position (Round #{roundId})</p>
-            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">
+            <p className="text-xs text-gray-500 uppercase tracking-wider">Your Position (Round #{roundId})</p>
+            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">
               Demo
             </span>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-[10px] text-red-400">CHAOTIC tokens</p>
+              <p className="text-xs text-red-400">CHAOTIC tokens</p>
               <p className="text-sm font-mono text-white">{demoPosition.high.toFixed(4)}</p>
             </div>
             <div>
-              <p className="text-[10px] text-blue-400">CALM tokens</p>
+              <p className="text-xs text-blue-400">CALM tokens</p>
               <p className="text-sm font-mono text-white">{demoPosition.low.toFixed(4)}</p>
             </div>
           </div>
           {demoBuyFlash && (
-            <p className="text-[10px] text-green-400 mt-2 animate-pulse">✓ Bet placed successfully!</p>
+            <p className="text-xs text-green-400 mt-2 animate-pulse">✓ Bet placed successfully!</p>
           )}
         </div>
       )}
 
       {/* How payoffs work */}
       <div className="mt-5 rounded-xl bg-white/[0.02] border border-white/5 p-4">
-        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">How It Works</p>
+        <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">How It Works</p>
         <p className="text-xs text-gray-400 leading-relaxed">
           Each round snapshots the current 24h realised volatility and opens a 1-hour trading window.
           After trading closes, the round waits 24 hours. At resolution, the new realised vol is compared
@@ -544,6 +552,30 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
           Correct callers split the entire pool proportionally.
         </p>
       </div>
+
+      {/* ─── Resolved Rounds ───────────────────────────────────────── */}
+      {resolvedRounds.length > 0 && (
+        <div className="mt-5">
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Recent Results</p>
+          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            {resolvedRounds.map((r: SimulatedRound) => (
+              <SimResolvedRow key={r.roundId} round={r} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* On-chain round history */}
+      {isContractDeployed && onChainRoundId > 1 && (
+        <div className="mt-5">
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Past Rounds</p>
+          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            {Array.from({ length: Math.min(onChainRoundId - 1, 10) }, (_, i) => onChainRoundId - 1 - i).map((rid) => (
+              <OnChainPastRoundRow key={rid} roundId={rid} marketAddress={marketAddress} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
