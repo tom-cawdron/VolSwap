@@ -1,7 +1,7 @@
 """
 Multi-Asset XGBoost Regime Classifier with Platt-Scaling Calibration.
 
-Trains one XGBoost model **per asset** on 14 features (8 self + 6 cross)
+Trains one XGBoost model **per asset** on 16 features (10 self + 6 cross)
 using HMM-generated regime labels.  Platt scaling is applied so that
 ``predict_proba`` returns well-calibrated probabilities for the LMSR AMM.
 
@@ -16,6 +16,17 @@ Usage:
     python -m src.xgboost_model --asset eth   # single asset
 """
 
+from xgboost import XGBClassifier
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    log_loss,
+    roc_auc_score,
+)
+from sklearn.calibration import CalibratedClassifierCV, calibration_curve
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 import argparse
 import json
 from pathlib import Path
@@ -24,17 +35,6 @@ import joblib
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-from sklearn.calibration import CalibratedClassifierCV, calibration_curve
-from sklearn.metrics import (
-    accuracy_score,
-    classification_report,
-    log_loss,
-    roc_auc_score,
-)
-from xgboost import XGBClassifier
 
 try:
     from src.features import (
@@ -120,10 +120,12 @@ def train_xgboost(
             # Include at least 20% of minority samples in training
             min_count = max(3, len(minority_indices) // 5)
             # Place split after the min_count-th minority sample
-            new_split = int(minority_indices[min(min_count - 1, len(minority_indices) - 1)]) + 1
+            new_split = int(minority_indices[min(
+                min_count - 1, len(minority_indices) - 1)]) + 1
             # Leave at least 30 samples for validation
             new_split = min(new_split, len(features) - 30)
-            print(f"  [WARN] Adjusted split {split} → {new_split} to include both classes in training.")
+            print(
+                f"  [WARN] Adjusted split {split} → {new_split} to include both classes in training.")
             split = new_split
 
     X_train, X_val = features[:split], features[split:]
@@ -168,8 +170,10 @@ def evaluate_model(
         y_proba = proba_raw[:, 1]
 
     acc = accuracy_score(y_val, y_pred)
-    ll = log_loss(y_val, y_proba, labels=[0, 1]) if len(np.unique(y_val)) > 1 else float("nan")
-    auc = roc_auc_score(y_val, y_proba) if len(np.unique(y_val)) > 1 else float("nan")
+    ll = log_loss(y_val, y_proba, labels=[0, 1]) if len(
+        np.unique(y_val)) > 1 else float("nan")
+    auc = roc_auc_score(y_val, y_proba) if len(
+        np.unique(y_val)) > 1 else float("nan")
 
     print(f"\n  Accuracy:  {acc:.4f}")
     print(f"  Log-loss:  {ll:.4f}")
@@ -178,7 +182,8 @@ def evaluate_model(
     unique_labels = sorted(set(y_val))
     names = [["LOW_VOL", "HIGH_VOL"][i] for i in unique_labels]
     print("\n  Classification Report:")
-    print(classification_report(y_val, y_pred, labels=unique_labels, target_names=names))
+    print(classification_report(y_val, y_pred,
+          labels=unique_labels, target_names=names))
 
     return {"accuracy": acc, "log_loss": ll, "auc": auc}
 
@@ -222,7 +227,8 @@ def plot_feature_importance(
     indices = np.argsort(importances)[::-1]
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.barh(range(len(feature_cols)), importances[indices[::-1]], align="center")
+    ax.barh(range(len(feature_cols)),
+            importances[indices[::-1]], align="center")
     ax.set_yticks(range(len(feature_cols)))
     ax.set_yticklabels([feature_cols[i] for i in indices[::-1]])
     ax.set_xlabel("Feature Importance (gain)")
@@ -353,7 +359,8 @@ def train_all() -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="XGBoost regime classifier training")
+    parser = argparse.ArgumentParser(
+        description="XGBoost regime classifier training")
     parser.add_argument(
         "--asset", type=str, default=None,
         help="Single asset short name (eth/btc/sol). Omit for all.",

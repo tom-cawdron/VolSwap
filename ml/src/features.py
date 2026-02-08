@@ -5,8 +5,8 @@ Fetches OHLCV data from Binance via ccxt for ETH/USDT, BTC/USDT, and
 SOL/USDT, and computes per-asset self-features plus cross-asset features
 used by the HMM labeller and XGBoost classifier.
 
-Feature structure per model (14 columns):
-    8 self-features   — base technical + GARCH(1,1)
+Feature structure per model (16 columns):
+    10 self-features  — 5 base technical + 5 GARCH(1,1)
     3 cross-features  — from other asset 1
     3 cross-features  — from other asset 2
 
@@ -59,7 +59,8 @@ def fetch_ohlcv(
     """Fetch OHLCV candles from a ccxt-supported exchange."""
     exchange = getattr(ccxt, exchange_id)()
     raw = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
-    df = pd.DataFrame(raw, columns=["timestamp", "open", "high", "low", "close", "volume"])
+    df = pd.DataFrame(
+        raw, columns=["timestamp", "open", "high", "low", "close", "volume"])
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
     df.set_index("timestamp", inplace=True)
     return df
@@ -100,7 +101,8 @@ def add_realised_vol(df: pd.DataFrame, windows: list[int] | None = None) -> pd.D
     if windows is None:
         windows = [24, 168]
     for w in windows:
-        df[f"realised_vol_{w}h"] = df["log_return"].rolling(w).std() * np.sqrt(w)
+        df[f"realised_vol_{w}h"] = df["log_return"].rolling(
+            w).std() * np.sqrt(w)
     return df
 
 
@@ -241,7 +243,7 @@ def build_feature_matrix(
     include_garch: bool = True,
 ) -> pd.DataFrame:
     """
-    Build the complete 14-column feature DataFrame for one target asset.
+    Build the complete 16-column feature DataFrame for one target asset.
 
     Parameters
     ----------
@@ -255,9 +257,10 @@ def build_feature_matrix(
     Returns
     -------
     pd.DataFrame
-        Rows with NaN dropped. Columns = 8 self + 6 cross features.
+        Rows with NaN dropped. Columns = 10 self + 6 cross features.
     """
-    target_df = compute_self_features(all_ohlcv[target_symbol].copy(), include_garch=include_garch)
+    target_df = compute_self_features(
+        all_ohlcv[target_symbol].copy(), include_garch=include_garch)
 
     # Determine other assets
     other_symbols = [s for s in all_ohlcv if s != target_symbol]
@@ -331,15 +334,15 @@ GARCH_COLS: list[str] = [
     "standardised_residual",
 ]
 
-# All 8 self-features for XGBoost
+# All 10 self-features for XGBoost
 SELF_FEATURE_COLS: list[str] = SELF_BASE_COLS + GARCH_COLS
 
 
 def get_all_feature_cols(target: str) -> list[str]:
     """
-    Return the full ordered 14-column feature list for a target asset.
+    Return the full ordered 16-column feature list for a target asset.
 
-    8 self-features + 6 cross-features (3 per other asset, sorted by prefix).
+    10 self-features + 6 cross-features (3 per other asset, sorted by prefix).
     This is the definitive column order for both training and inference.
     """
     return SELF_FEATURE_COLS + get_cross_feature_cols(target)

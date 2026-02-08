@@ -64,7 +64,7 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
     pendingRounds: simPending,
     resolvedRounds: simResolved,
     roundId: simRoundId,
-  } = useSimulatedRound(isContractDeployed ? null : prediction);
+  } = useSimulatedRound(isContractDeployed ? null : prediction, asset);
 
   // ─── Read current round ID (on-chain) ──────────────────────────────
   const { data: currentRoundId } = useReadContract({
@@ -123,16 +123,16 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
   // ─── Unified round values (on-chain OR simulated) ──────────────────
   const onChainRound = roundData as
     | {
-        snapshotVol: bigint;
-        tradingEnd: bigint;
-        resolutionTime: bigint;
-        totalCollateral: bigint;
-        totalHighTokens: bigint;
-        totalLowTokens: bigint;
-        resolved: boolean;
-        highVolWon: boolean;
-        resolvedVol: bigint;
-      }
+      snapshotVol: bigint;
+      tradingEnd: bigint;
+      resolutionTime: bigint;
+      totalCollateral: bigint;
+      totalHighTokens: bigint;
+      totalLowTokens: bigint;
+      resolved: boolean;
+      highVolWon: boolean;
+      resolvedVol: bigint;
+    }
     | undefined;
 
   // Pick active round data source
@@ -175,9 +175,9 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
 
   const rawCost = amount
     ? parseFloat(amount) *
-      (outcome === "CHAOTIC"
-        ? Number(priceHigh ?? 5e17) / 1e18
-        : Number(priceLow ?? 5e17) / 1e18)
+    (outcome === "CHAOTIC"
+      ? Number(priceHigh ?? 5e17) / 1e18
+      : Number(priceLow ?? 5e17) / 1e18)
     : 0;
   const estimatedCost = amount ? (rawCost * (1 + FEE_RATE)).toFixed(6) : "0";
 
@@ -327,11 +327,10 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
       <div className="grid grid-cols-2 gap-4 mb-5">
         <button
           onClick={() => setOutcome("CHAOTIC")}
-          className={`rounded-2xl p-6 border-2 transition-all ${
-            outcome === "CHAOTIC"
+          className={`rounded-2xl p-6 border-2 transition-all ${outcome === "CHAOTIC"
               ? "border-red-500/60 bg-red-500/10 glow-red scale-[1.02]"
               : "border-white/5 bg-white/[0.02] hover:border-red-500/30 hover:bg-red-500/5"
-          }`}
+            }`}
         >
           <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Chaotic</p>
           <p className="text-2xl font-mono font-bold text-red-400">{formattedPriceHigh}</p>
@@ -340,11 +339,10 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
 
         <button
           onClick={() => setOutcome("CALM")}
-          className={`rounded-2xl p-6 border-2 transition-all ${
-            outcome === "CALM"
+          className={`rounded-2xl p-6 border-2 transition-all ${outcome === "CALM"
               ? "border-blue-500/60 bg-blue-500/10 glow-indigo scale-[1.02]"
               : "border-white/5 bg-white/[0.02] hover:border-blue-500/30 hover:bg-blue-500/5"
-          }`}
+            }`}
         >
           <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Calm</p>
           <p className="text-2xl font-mono font-bold text-blue-400">{formattedPriceLow}</p>
@@ -423,21 +421,20 @@ export default function TradePanel({ asset, prediction }: TradePanelProps) {
         <button
           onClick={isConnected ? handleBuy : openConnectModal}
           disabled={isConnected && (!amount || isPending || !isTradingOpen)}
-          className={`w-full rounded-xl py-3.5 font-semibold transition-all ${
-            !isConnected
+          className={`w-full rounded-xl py-3.5 font-semibold transition-all ${!isConnected
               ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20"
               : outcome === "CHAOTIC"
-              ? "bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20"
-              : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20"
-          } disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none`}
+                ? "bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20"
+                : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20"
+            } disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none`}
         >
           {isPending
             ? "Confirming …"
             : !isConnected
-            ? "Connect Wallet"
-            : !isTradingOpen
-            ? "Trading Closed"
-            : `Bet ${outcome}`}
+              ? "Connect Wallet"
+              : !isTradingOpen
+                ? "Trading Closed"
+                : `Bet ${outcome}`}
         </button>
       )}
 
@@ -550,12 +547,12 @@ function OnChainPastRoundRow({ roundId, marketAddress }: { roundId: number; mark
 
   const r = roundData as
     | {
-        snapshotVol: bigint;
-        totalCollateral: bigint;
-        resolved: boolean;
-        highVolWon: boolean;
-        resolvedVol: bigint;
-      }
+      snapshotVol: bigint;
+      totalCollateral: bigint;
+      resolved: boolean;
+      highVolWon: boolean;
+      resolvedVol: bigint;
+    }
     | undefined;
 
   if (!r) return null;

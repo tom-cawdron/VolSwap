@@ -3,9 +3,9 @@ Master Training Pipeline — Finance Multiverse.
 
 Single entry point that runs the full pipeline for all three assets:
     1. Fetch OHLCV data for ETH, BTC, SOL
-    2. Build 14-feature matrices (self + cross) for each asset
+    2. Build 16-feature matrices (self + cross) for each asset
     3. Fit HMM regime labels per asset (self-vol only)
-    4. Train XGBoost classifiers per asset (full 14 features)
+    4. Train XGBoost classifiers per asset (full 16 features)
 
 Run once before deployment:
     python -m src.train_pipeline          # from ml/

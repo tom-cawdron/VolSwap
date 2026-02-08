@@ -8,7 +8,7 @@ Endpoints:
 
 Models are loaded once at startup and cached.  Each request fetches
 live OHLCV data for all three assets (needed for cross-features),
-builds the 14-feature vector for the target, and runs the calibrated
+builds the 16-feature vector for the target, and runs the calibrated
 XGBoost model.
 
 Output JSON schema per asset is UNCHANGED from the single-asset version.
@@ -113,13 +113,15 @@ def _load_all_models() -> None:
     for short in VALID_ASSETS:
         model_path = MODEL_DIR / f"xgb_{short}.joblib"
         if not model_path.exists():
-            logger.warning("Model for %s not found at %s — skipping.", short, model_path)
+            logger.warning(
+                "Model for %s not found at %s — skipping.", short, model_path)
             continue
         try:
             model, cols = load_model(short)
             _models[short] = model
             _feature_cols[short] = cols
-            _model_hashes[short] = hashlib.sha256(model_path.read_bytes()).hexdigest()
+            _model_hashes[short] = hashlib.sha256(
+                model_path.read_bytes()).hexdigest()
             logger.info("Loaded %s model (%d features).", short, len(cols))
         except Exception as e:
             logger.error("Failed to load %s model: %s", short, e)
@@ -147,7 +149,7 @@ def _predict_asset(
     symbol = SHORT_TO_SYMBOL[short]
     feature_cols = _feature_cols[short]
 
-    # Build feature matrix (all 14 columns)
+    # Build feature matrix (all 16 columns)
     df = build_feature_matrix(symbol, all_ohlcv, include_garch=True)
     if len(df) < MIN_ROWS:
         raise HTTPException(
@@ -171,7 +173,8 @@ def _predict_asset(
 
     # Shannon entropy
     eps = 1e-9
-    entropy = -float(p_low * np.log(p_low + eps) + p_high * np.log(p_high + eps))
+    entropy = -float(p_low * np.log(p_low + eps) +
+                     p_high * np.log(p_high + eps))
     confidence = max(p_high, p_low)
     regime = "HIGH_VOL" if p_high > p_low else "LOW_VOL"
 

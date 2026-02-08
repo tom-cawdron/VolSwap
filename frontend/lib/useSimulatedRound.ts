@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { RegimePrediction } from "./types";
+import type { AssetKey, RegimePrediction } from "./types";
 
 // ─── Config ──────────────────────────────────────────────────────────
 
@@ -45,9 +45,9 @@ export interface UseSimulatedRoundsResult {
   isSimulated: boolean;
 }
 
-// ─── Persistence (survives re-renders, resets on page reload) ────────
+// ─── Persistence (per-asset, survives re-renders, resets on page reload) ──
 
-let _persistedRounds: SimulatedRound[] = [];
+const _persistedRoundsMap: Record<string, SimulatedRound[]> = {};
 
 // ─── Hook ────────────────────────────────────────────────────────────
 
@@ -67,13 +67,23 @@ let _persistedRounds: SimulatedRound[] = [];
  */
 export function useSimulatedRound(
   prediction: RegimePrediction | null | undefined,
+  asset: AssetKey = "eth",
 ): UseSimulatedRoundsResult {
-  const [rounds, setRounds] = useState<SimulatedRound[]>(_persistedRounds);
+  const [rounds, setRounds] = useState<SimulatedRound[]>(
+    () => _persistedRoundsMap[asset] ?? [],
+  );
   const predRef = useRef(prediction);
   predRef.current = prediction;
+  const assetRef = useRef(asset);
+  assetRef.current = asset;
+
+  // Sync local state when asset changes
+  useEffect(() => {
+    setRounds(_persistedRoundsMap[asset] ?? []);
+  }, [asset]);
 
   const updateRounds = useCallback((newRounds: SimulatedRound[]) => {
-    _persistedRounds = newRounds;
+    _persistedRoundsMap[assetRef.current] = newRounds;
     setRounds(newRounds);
   }, []);
 
@@ -81,20 +91,16 @@ export function useSimulatedRound(
   const createRound = useCallback((prevRoundId: number): SimulatedRound => {
     const now = Math.floor(Date.now() / 1000);
     const pred = predRef.current;
-    const snapshotVol = pred?.realised_vol_24h ?? 0.025;
-
-    // Simulate initial pool activity
-    const initialPool = 0.2 + Math.random() * 1.5;
-    const highRatio = pred ? pred.p_high_vol : 0.5;
+    const snapshotVol = pred?.realised_vol_24h ?? 0;
 
     return {
       roundId: prevRoundId + 1,
       snapshotVol,
       tradingEnd: now + TRADING_DURATION_S,
       resolutionTime: now + RESOLUTION_DELAY_S,
-      totalCollateral: initialPool,
-      totalHighTokens: initialPool * highRatio * 0.8,
-      totalLowTokens: initialPool * (1 - highRatio) * 0.8,
+      totalCollateral: 0,
+      totalHighTokens: 0,
+      totalLowTokens: 0,
       resolved: false,
       highVolWon: false,
       resolvedVol: 0,
@@ -119,10 +125,6 @@ export function useSimulatedRound(
       resolved: true,
       highVolWon: highWon,
       resolvedVol,
-      // Simulate final pool size
-      totalCollateral: r.totalCollateral + Math.random() * 1.5,
-      totalHighTokens: r.totalHighTokens + Math.random() * 0.5,
-      totalLowTokens: r.totalLowTokens + Math.random() * 0.5,
     };
   }, []);
 
@@ -137,7 +139,8 @@ export function useSimulatedRound(
 
     const interval = setInterval(() => {
       const now = Math.floor(Date.now() / 1000);
-      let current = [..._persistedRounds];
+      const key = assetRef.current;
+      let current = [...(_persistedRoundsMap[key] ?? [])];
       let changed = false;
 
       // 1. Resolve any rounds past their resolution time
@@ -158,18 +161,7 @@ export function useSimulatedRound(
         changed = true;
       }
 
-      // 3. Simulate slow pool growth on the active trading round
-      const activeIdx = current.findIndex((r) => !r.resolved && now < r.tradingEnd);
-      if (activeIdx >= 0 && Math.random() < 0.08) {
-        const r = current[activeIdx];
-        current[activeIdx] = {
-          ...r,
-          totalCollateral: r.totalCollateral + Math.random() * 0.03,
-          totalHighTokens: r.totalHighTokens + Math.random() * 0.015,
-          totalLowTokens: r.totalLowTokens + Math.random() * 0.015,
-        };
-        changed = true;
-      }
+      // 3. Pool stays at zero until real users trade — no simulated growth
 
       // 4. Prune: keep only last 30 rounds to avoid unbounded growth
       if (current.length > 30) {
